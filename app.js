@@ -8,7 +8,7 @@
   var FALLBACK_IMPORT_PROMPT = [
     "# Fiscell 账单转换 JSON 提示词",
     "",
-    "你是 Fiscell v1.0.29 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
+    "你是 Fiscell v1.0.30 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
     "",
     "输出 JSON：{\"app\":\"local-ledger\",\"version\":4,\"records\":[{\"id\":\"\",\"occurredAt\":\"2026-06-21T12:30:00+08:00\",\"kind\":\"income | expense | investment\",\"amount\":12.34,\"category\":\"分类\",\"project\":\"仅理财记录填写\",\"target\":\"仅理财记录填写二级分类或具体标的\",\"settlement\":\"none | pending\",\"settledAmount\":0,\"settledAt\":\"\",\"investmentProfit\":0,\"closedAt\":\"\",\"note\":\"备注\",\"tags\":[]}]}",
     "",
@@ -134,7 +134,7 @@
     els.totalAssets = document.getElementById("totalAssets");
     els.pendingIncome = document.getElementById("pendingIncome");
     els.pendingDebt = document.getElementById("pendingDebt");
-    els.actualAssets = document.getElementById("actualAssets");
+    els.expectedAssets = document.getElementById("expectedAssets");
     els.flexibleAssets = document.getElementById("flexibleAssets");
     els.pendingIncomeCard = document.getElementById("pendingIncomeCard");
     els.pendingDebtCard = document.getElementById("pendingDebtCard");
@@ -927,7 +927,7 @@
       investmentAssets: roundMoney(investmentAssets),
       preIncome: roundMoney(preIncome),
       preExpense: roundMoney(preExpense),
-      actualAssets: roundMoney(totalAssets + preIncome - preExpense),
+      expectedAssets: roundMoney(totalAssets + preIncome - preExpense),
       flexibleAssets: roundMoney(totalAssets - investmentAssets)
     };
   }
@@ -937,7 +937,7 @@
     els.totalAssets.textContent = formatMoney(summary.totalAssets);
     els.pendingIncome.textContent = formatMoney(summary.preIncome);
     els.pendingDebt.textContent = formatMoney(summary.preExpense);
-    els.actualAssets.textContent = formatMoney(summary.actualAssets);
+    els.expectedAssets.textContent = formatMoney(summary.expectedAssets);
     els.flexibleAssets.textContent = formatMoney(summary.flexibleAssets);
     els.totalAssetsCard.classList.toggle("active", !state.filters.pendingView && state.filters.kind === "all" && !state.filters.search && !state.filters.startDate && !state.filters.endDate && !state.filters.primaryCategory && !state.filters.secondaryCategory);
     els.pendingIncomeCard.classList.toggle("active", state.filters.pendingView === "income");
@@ -1328,7 +1328,7 @@
   function setCurrentAsset() {
     leaveBatchMode();
     var summary = getAssetSummary();
-    var raw = window.prompt("输入当前实际资产金额，将自动生成误差项：", String(summary.actualAssets));
+    var raw = window.prompt("输入当前总资产金额，将自动生成误差项：", String(summary.totalAssets));
     if (raw == null) {
       return;
     }
@@ -1337,9 +1337,9 @@
       return;
     }
     var target = roundMoney(parseMoney(raw));
-    var diff = roundMoney(target - summary.actualAssets);
+    var diff = roundMoney(target - summary.totalAssets);
     if (Math.abs(diff) < 0.01) {
-      showToast("当前实际资产已经一致，无需生成误差项。");
+      showToast("当前总资产已经一致，无需生成误差项。");
       return;
     }
     var nowIso = new Date().toISOString();
@@ -1356,7 +1356,7 @@
       settledAt: "",
       investmentProfit: 0,
       occurredAt: nowIso,
-      note: "当前资产校准误差项，目标实际资产：" + formatMoney(target),
+      note: "当前资产校准误差项，目标总资产：" + formatMoney(target),
       tags: ["误差项", "资产校准"],
       createdAt: nowIso,
       updatedAt: nowIso
