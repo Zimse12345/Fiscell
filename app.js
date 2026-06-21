@@ -8,7 +8,7 @@
   var FALLBACK_IMPORT_PROMPT = [
     "# Fiscell 账单转换 JSON 提示词",
     "",
-    "你是 Fiscell v1.0.28 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
+    "你是 Fiscell v1.0.29 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
     "",
     "输出 JSON：{\"app\":\"local-ledger\",\"version\":4,\"records\":[{\"id\":\"\",\"occurredAt\":\"2026-06-21T12:30:00+08:00\",\"kind\":\"income | expense | investment\",\"amount\":12.34,\"category\":\"分类\",\"project\":\"仅理财记录填写\",\"target\":\"仅理财记录填写二级分类或具体标的\",\"settlement\":\"none | pending\",\"settledAmount\":0,\"settledAt\":\"\",\"investmentProfit\":0,\"closedAt\":\"\",\"note\":\"备注\",\"tags\":[]}]}",
     "",
@@ -43,6 +43,7 @@
       endDate: "",
       primaryCategory: "",
       secondaryCategory: "",
+      sortBy: "time",
       pendingView: ""
     },
     lastPreset: {
@@ -114,6 +115,7 @@
     els.endDateFilter = document.getElementById("endDateFilter");
     els.primaryCategoryFilter = document.getElementById("primaryCategoryFilter");
     els.secondaryCategoryFilter = document.getElementById("secondaryCategoryFilter");
+    els.sortByFilter = document.getElementById("sortByFilter");
     els.clearAllBtn = document.getElementById("clearAllBtn");
     els.importBtn = document.getElementById("importBtn");
     els.importMenu = document.getElementById("importMenu");
@@ -247,6 +249,13 @@
       state.filters.pendingView = "";
       state.pagination.page = 1;
       renderOpenComboMenu("secondaryCategoryFilter");
+      render();
+    });
+    els.sortByFilter.addEventListener("change", function () {
+      leaveBatchMode();
+      state.filters.sortBy = els.sortByFilter.value || "time";
+      state.filters.pendingView = "";
+      state.pagination.page = 1;
       render();
     });
     els.totalAssetsCard.addEventListener("click", resetViewFilters);
@@ -1083,9 +1092,30 @@
         }
         return true;
       })
-      .sort(function (a, b) {
-        return new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime();
-      });
+      .sort(compareRecordsForView);
+  }
+
+  function compareRecordsForView(a, b) {
+    var sortBy = state.filters.sortBy || "time";
+    if (sortBy === "amount") {
+      return compareNumberDesc(a.amount, b.amount) || compareTimeDesc(a, b);
+    }
+    if (sortBy === "note") {
+      return cleanText(a.note).localeCompare(cleanText(b.note), "zh-CN", { numeric: true }) || compareTimeDesc(a, b);
+    }
+    return compareTimeDesc(a, b);
+  }
+
+  function compareTimeDesc(a, b) {
+    return getRecordTime(b) - getRecordTime(a);
+  }
+
+  function compareNumberDesc(a, b) {
+    return (Number(b) || 0) - (Number(a) || 0);
+  }
+
+  function getRecordTime(record) {
+    return new Date(record.occurredAt).getTime() || 0;
   }
 
   function buildSearchText(record) {
@@ -1350,6 +1380,7 @@
     state.filters.endDate = "";
     state.filters.primaryCategory = "";
     state.filters.secondaryCategory = "";
+    state.filters.sortBy = "time";
     state.filters.pendingView = "";
     state.pagination.page = 1;
     els.kindFilter.value = "all";
@@ -1358,6 +1389,7 @@
     els.endDateFilter.value = "";
     els.primaryCategoryFilter.value = "";
     els.secondaryCategoryFilter.value = "";
+    els.sortByFilter.value = "time";
     refreshAdvancedFilterOptions();
   }
 
@@ -1372,12 +1404,14 @@
       state.filters.endDate = "";
       state.filters.primaryCategory = "";
       state.filters.secondaryCategory = "";
+      state.filters.sortBy = "time";
       state.pagination.page = 1;
       els.searchInput.value = "";
       els.startDateFilter.value = "";
       els.endDateFilter.value = "";
       els.primaryCategoryFilter.value = "";
       els.secondaryCategoryFilter.value = "";
+      els.sortByFilter.value = "time";
       refreshAdvancedFilterOptions();
     }
     render();

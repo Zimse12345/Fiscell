@@ -16,8 +16,9 @@
         </svg>
         <div>
           <h1>Fiscell</h1>
-          <p class="eyebrow">v1.0.28</p>
+          <p class="eyebrow">v1.0.29 · author:Zimse</p>
         </div>
+        <a class="repo-link" href="https://github.com/Zimse12345/Fiscell" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
       <div class="header-actions">
         <button id="themeToggle" class="theme-toggle" type="button" title="切换主题" aria-label="切换主题">
@@ -196,6 +197,14 @@
                 <div class="combo-menu hidden" data-combo-menu="secondaryCategoryFilter"></div>
               </div>
               <datalist id="secondaryCategoryOptions"></datalist>
+            </label>
+            <label class="field compact">
+              <span>排序方式</span>
+              <select id="sortByFilter">
+                <option value="time">时间</option>
+                <option value="amount">金额</option>
+                <option value="note">备注（字典序）</option>
+              </select>
             </label>
           </div>
 
