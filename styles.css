@@ -3,6 +3,7 @@
   --bg: #f4f6f8;
   --panel: #ffffff;
   --panel-strong: #f8fafc;
+  --input: #ffffff;
   --ink: #151b23;
   --muted: #657282;
   --line: #d8e0e7;
@@ -26,6 +27,7 @@
   --bg: #0f141b;
   --panel: #171d25;
   --panel-strong: #111820;
+  --input: #101720;
   --ink: #e8edf3;
   --muted: #9ba8b7;
   --line: #2b3542;
@@ -298,6 +300,8 @@ h2 {
 
 .stats-actions {
   display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  gap: 6px;
 }
 
 .stats-actions .secondary {
@@ -306,12 +310,35 @@ h2 {
   padding: 0 7px;
 }
 
+.asset-visibility-toggle {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  padding: 0;
+}
+
+.asset-visibility-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .metric,
 .entry-panel,
 .main-panel,
 .chart-box,
 .records-section,
-.pending-banner {
+.pending-banner,
+.trend-panel {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -380,6 +407,80 @@ h2 {
   min-width: 0;
 }
 
+.trend-panel {
+  position: relative;
+  margin-top: 20px;
+  padding: 10px;
+}
+
+.trend-panel .panel-heading {
+  margin-bottom: 6px;
+}
+
+.trend-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.trend-title-row > div {
+  min-width: 0;
+}
+
+.trend-panel h2 {
+  margin: 0 0 2px;
+  font-size: 14px;
+}
+
+.trend-panel select {
+  width: 82px;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--input);
+  color: var(--ink);
+  padding: 0 8px;
+}
+
+.clear-date-filter {
+  min-height: 30px;
+  border: 1px solid rgba(189, 63, 52, 0.22);
+  border-radius: 6px;
+  background: var(--expense-soft);
+  color: var(--expense);
+  padding: 0 9px;
+}
+
+.trend-panel canvas {
+  height: 220px;
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 13 13'%3E%3Cpath d='M6.5 1.5v10M1.5 6.5h10' stroke='%23657282' stroke-width='1' stroke-linecap='round'/%3E%3Ccircle cx='6.5' cy='6.5' r='1' fill='%23657282'/%3E%3C/svg%3E") 6 6, crosshair;
+}
+
+.asset-trend-tooltip {
+  position: absolute;
+  z-index: 10;
+  min-width: 120px;
+  pointer-events: none;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  padding: 7px 8px;
+}
+
+.asset-trend-tooltip strong,
+.asset-trend-tooltip span {
+  display: block;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.asset-trend-tooltip span {
+  color: var(--muted);
+  margin-top: 2px;
+}
+
 .entry-panel,
 .main-panel,
 .stats-panel,
@@ -389,7 +490,6 @@ h2 {
   min-width: 0;
 }
 
-.entry-panel,
 .stats-panel {
   position: sticky;
   top: 8px;
@@ -408,6 +508,7 @@ h2 {
 }
 
 .entry-panel {
+  position: static;
   max-height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
@@ -1125,7 +1226,7 @@ button.detail-item:hover {
 
 .toast {
   position: fixed;
-  z-index: 90;
+  z-index: 220;
   right: 18px;
   bottom: 18px;
   transform: translateY(18px);

@@ -5,10 +5,11 @@
   var BACKUP_KEY = "local-ledger.last-import-backup.v4";
   var PRESET_KEY = "local-ledger.last-preset.v2";
   var THEME_KEY = "local-ledger.theme.v1";
+  var ASSET_VISIBILITY_KEY = "local-ledger.asset-visibility.v1";
   var FALLBACK_IMPORT_PROMPT = [
     "# Fiscell 账单转换 JSON 提示词",
     "",
-    "你是 Fiscell v1.1.7 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
+    "你是 Fiscell v1.1.13 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
     "",
     "输出 JSON：{\"app\":\"local-ledger\",\"version\":4,\"records\":[{\"id\":\"\",\"occurredAt\":\"2026-06-21T12:30:00+08:00\",\"kind\":\"income | expense | investment\",\"amount\":12.34,\"category\":\"分类\",\"project\":\"仅理财记录填写\",\"target\":\"仅理财记录填写二级分类或具体标的\",\"settlement\":\"none | pending\",\"settledAmount\":0,\"settledAt\":\"\",\"investmentProfit\":0,\"closedAt\":\"\",\"note\":\"备注\",\"tags\":[]}]}",
     "",
@@ -110,6 +111,8 @@
       totalPages: 1,
       totalRecords: 0
     },
+    assetVisible: true,
+    assetTrendRange: "30",
     importMode: "merge"
   };
   mergeLexiconTerms(smartCategoryLexicons["餐饮"], {
@@ -130,6 +133,8 @@
   var els = {};
   var toastTimer = null;
   var resizeTimer = null;
+  var assetTrendRenderState = null;
+  var assetTrendDrag = null;
   var smartClassifyJob = {
     records: [],
     sourceRecords: [],
@@ -141,6 +146,7 @@
   function init() {
     cacheElements();
     applyTheme(localStorage.getItem(THEME_KEY) || "light");
+    state.assetVisible = localStorage.getItem(ASSET_VISIBILITY_KEY) !== "hidden";
     state.lastPreset = loadPreset();
     state.records = loadRecords();
     bindEvents();
@@ -192,6 +198,7 @@
     els.exportJsonBtn = document.getElementById("exportJsonBtn");
     els.exportCsvBtn = document.getElementById("exportCsvBtn");
     els.setAssetBtn = document.getElementById("setAssetBtn");
+    els.assetVisibilityBtn = document.getElementById("assetVisibilityBtn");
     els.themeToggle = document.getElementById("themeToggle");
     els.themeIcon = document.getElementById("themeIcon");
     els.importFile = document.getElementById("importFile");
@@ -233,6 +240,11 @@
     els.emptyState = document.getElementById("emptyState");
     els.incomeChart = document.getElementById("incomeChart");
     els.expenseChart = document.getElementById("expenseChart");
+    els.assetTrendChart = document.getElementById("assetTrendChart");
+    els.assetTrendRange = document.getElementById("assetTrendRange");
+    els.assetTrendHint = document.getElementById("assetTrendHint");
+    els.assetTrendTooltip = document.getElementById("assetTrendTooltip");
+    els.clearDateFilterBtn = document.getElementById("clearDateFilterBtn");
     els.incomeHint = document.getElementById("incomeHint");
     els.expenseHint = document.getElementById("expenseHint");
     els.chartDrawer = document.getElementById("chartDrawer");
@@ -354,6 +366,7 @@
     els.smartClassifyCancelBtn.addEventListener("click", closeSmartClassifyDialog);
     els.smartClassifyConfirmBtn.addEventListener("click", runSmartClassifyJob);
     els.setAssetBtn.addEventListener("click", setCurrentAsset);
+    els.assetVisibilityBtn.addEventListener("click", toggleAssetVisibility);
     els.clearAllBtn.addEventListener("click", clearAll);
     els.importBtn.addEventListener("click", function (event) {
       event.stopPropagation();
@@ -443,6 +456,20 @@
         setPage(parseInt(els.pageInput.value, 10));
       }
     });
+    els.assetTrendRange.addEventListener("change", function () {
+      state.assetTrendRange = els.assetTrendRange.value || "30";
+      drawAssetTrendChart();
+    });
+    els.assetTrendChart.addEventListener("mousemove", handleAssetTrendHover);
+    els.assetTrendChart.addEventListener("mouseleave", hideAssetTrendTooltip);
+    els.assetTrendChart.addEventListener("mousedown", beginAssetTrendDrag);
+    els.assetTrendChart.addEventListener("mouseup", finishAssetTrendDrag);
+    document.addEventListener("mouseup", function (event) {
+      if (assetTrendDrag) {
+        finishAssetTrendDrag(event);
+      }
+    });
+    els.clearDateFilterBtn.addEventListener("click", clearDateFilter);
     els.actionMenu.addEventListener("click", handleActionMenuClick);
     document.querySelectorAll(".combo-button").forEach(function (button) {
       button.addEventListener("click", function (event) {
@@ -1006,6 +1033,7 @@
     renderTable(pageRecords);
     renderBatchControls(pageRecords, filteredRecords.length);
     renderPagination(filteredRecords.length);
+    renderDateFilterControls();
     renderCharts();
     refreshChartDrawer();
     fillDatalists();
@@ -1048,11 +1076,16 @@
 
   function renderSummary() {
     var summary = getAssetSummary();
-    els.totalAssets.textContent = formatMoney(summary.totalAssets);
-    els.pendingIncome.textContent = formatMoney(summary.preIncome);
-    els.pendingDebt.textContent = formatMoney(summary.preExpense);
-    els.expectedAssets.textContent = formatMoney(summary.expectedAssets);
-    els.flexibleAssets.textContent = formatMoney(summary.flexibleAssets);
+    els.totalAssets.textContent = privateMoney(summary.totalAssets);
+    els.pendingIncome.textContent = privateMoney(summary.preIncome);
+    els.pendingDebt.textContent = privateMoney(summary.preExpense);
+    els.expectedAssets.textContent = privateMoney(summary.expectedAssets);
+    els.flexibleAssets.textContent = privateMoney(summary.flexibleAssets);
+    els.assetVisibilityBtn.setAttribute("aria-pressed", String(!state.assetVisible));
+    els.assetVisibilityBtn.setAttribute("title", state.assetVisible ? "隐藏资产数字" : "显示资产数字");
+    els.assetVisibilityBtn.setAttribute("aria-label", state.assetVisible ? "隐藏资产数字" : "显示资产数字");
+    els.assetVisibilityBtn.querySelector(".icon-eye").classList.toggle("hidden", !state.assetVisible);
+    els.assetVisibilityBtn.querySelector(".icon-eye-off").classList.toggle("hidden", state.assetVisible);
     els.totalAssetsCard.classList.toggle("active", !state.filters.pendingView && state.filters.kind === "all" && !state.filters.search && !state.filters.startDate && !state.filters.endDate && !state.filters.primaryCategory && !state.filters.secondaryCategory);
     els.pendingIncomeCard.classList.toggle("active", state.filters.pendingView === "income");
     els.pendingDebtCard.classList.toggle("active", state.filters.pendingView === "expense");
@@ -1490,6 +1523,7 @@
   function renderCharts() {
     drawStructureChart(els.incomeChart, "income", els.incomeHint);
     drawStructureChart(els.expenseChart, "expense", els.expenseHint);
+    drawAssetTrendChart();
   }
 
   function drawStructureChart(canvas, kind, hintEl) {
@@ -1500,7 +1534,7 @@
 
     var entries = getStructureEntries(kind);
     var total = entries.reduce(function (sum, item) { return sum + item.value; }, 0);
-    hintEl.textContent = total ? formatMoney(total) : "";
+    hintEl.textContent = total ? privateMoney(total) : "";
 
     if (!total) {
       drawEmptyChart(ctx, width, height, kind === "income" ? "暂无已结算收入" : "暂无已结算支出");
@@ -1529,10 +1563,340 @@
     ctx.fillStyle = cssVar("--ink");
     ctx.font = "700 13px Microsoft YaHei, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText(kind === "income" ? "收入" : "支出", cx, cy - 4);
-    ctx.font = "11px Microsoft YaHei, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.fillText(kind === "income" ? "收入" : "支出", cx, cy);
+  }
+
+  function drawAssetTrendChart(hoverPoint, dragRange) {
+    if (!els.assetTrendChart) {
+      return;
+    }
+    var ctx = setupCanvas(els.assetTrendChart);
+    var width = els.assetTrendChart.clientWidth;
+    var height = els.assetTrendChart.clientHeight;
+    ctx.clearRect(0, 0, width, height);
+
+    var points = getAssetTrendPoints(state.assetTrendRange);
+    points = sampleTrendPoints(points, 256);
+    if (!points.length) {
+      els.assetTrendHint.textContent = "";
+      assetTrendRenderState = null;
+      drawEmptyChart(ctx, width, height, "暂无资产变化数据");
+      return;
+    }
+    var current = points[points.length - 1].value;
+    els.assetTrendHint.textContent = "当前 " + privateMoney(current);
+
+    var padLeft = 54;
+    var padRight = 16;
+    var padTop = 18;
+    var padBottom = 34;
+    var plotW = Math.max(1, width - padLeft - padRight);
+    var plotH = Math.max(1, height - padTop - padBottom);
+    var minTs = points[0].ts;
+    var maxTs = points[points.length - 1].ts;
+    if (maxTs <= minTs) {
+      maxTs = minTs + 86400000;
+    }
+    var values = points.map(function (point) { return point.value; });
+    var minValue = Math.min.apply(null, values);
+    var maxValue = Math.max.apply(null, values);
+    if (maxValue === minValue) {
+      maxValue += 1;
+      minValue -= 1;
+    }
+    var valuePad = (maxValue - minValue) * 0.08;
+    minValue -= valuePad;
+    maxValue += valuePad;
+
+    function xOf(ts) {
+      return padLeft + (ts - minTs) / (maxTs - minTs) * plotW;
+    }
+    function yOf(value) {
+      return padTop + (maxValue - value) / (maxValue - minValue) * plotH;
+    }
+
+    var selectedRange = dragRange || getVisibleDateSelectionRange(minTs, maxTs);
+    if (selectedRange) {
+      var selectedLeft = xOf(Math.max(minTs, selectedRange.start));
+      var selectedRight = xOf(Math.min(maxTs, selectedRange.end));
+      ctx.fillStyle = "rgba(31, 157, 112, 0.14)";
+      ctx.fillRect(Math.min(selectedLeft, selectedRight), padTop, Math.abs(selectedRight - selectedLeft), plotH);
+    }
+
+    ctx.strokeStyle = cssVar("--line");
+    ctx.lineWidth = 1;
     ctx.fillStyle = cssVar("--muted");
-    ctx.fillText(formatMoney(total), cx, cy + 18);
+    ctx.font = "11px Microsoft YaHei, sans-serif";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    for (var i = 0; i <= 3; i += 1) {
+      var ratio = i / 3;
+      var y = padTop + ratio * plotH;
+      var value = maxValue - ratio * (maxValue - minValue);
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(width - padRight, y);
+      ctx.stroke();
+      ctx.fillText(state.assetVisible ? shortMoney(Math.max(0, value)) : "****", padLeft - 8, y);
+    }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    var firstDate = new Date(minTs);
+    var lastDate = new Date(maxTs);
+    ctx.fillText(formatShortDate(firstDate), padLeft, height - padBottom + 12);
+    ctx.fillText(formatShortDate(lastDate), width - padRight - 4, height - padBottom + 12);
+
+    ctx.strokeStyle = "#2468d8";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    points.forEach(function (point, index) {
+      var x = xOf(point.ts);
+      var y = yOf(point.value);
+      if (index === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    ctx.stroke();
+
+    if (hoverPoint) {
+      var hoverX = xOf(hoverPoint.ts);
+      var hoverY = yOf(hoverPoint.value);
+      ctx.save();
+      ctx.strokeStyle = "rgba(36, 104, 216, 0.22)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(hoverX, padTop);
+      ctx.lineTo(hoverX, height - padBottom);
+      ctx.stroke();
+      ctx.fillStyle = "#2468d8";
+      ctx.beginPath();
+      ctx.arc(hoverX, hoverY, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = cssVar("--panel");
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    var last = points[points.length - 1];
+    ctx.fillStyle = "#2468d8";
+    ctx.beginPath();
+    ctx.arc(xOf(last.ts), yOf(last.value), 3, 0, Math.PI * 2);
+    ctx.fill();
+    assetTrendRenderState = {
+      points: points,
+      padLeft: padLeft,
+      padRight: padRight,
+      padTop: padTop,
+      padBottom: padBottom,
+      plotW: plotW,
+      plotH: plotH,
+      minTs: minTs,
+      maxTs: maxTs,
+      minValue: minValue,
+      maxValue: maxValue
+    };
+  }
+
+  function getAssetTrendPoints(range) {
+    var events = getAssetEvents();
+    if (!events.length) {
+      return [];
+    }
+    var now = Date.now();
+    var all = range === "all";
+    var startTs = all ? events[0].ts : now - Number(range || 30) * 86400000;
+    var running = 0;
+    var points = [];
+    events.forEach(function (event) {
+      if (event.ts < startTs) {
+        running = roundMoney(running + event.delta);
+      }
+    });
+    if (!all) {
+      points.push({ ts: startTs, value: running });
+    }
+    events.forEach(function (event) {
+      if (event.ts >= startTs && event.ts <= now) {
+        running = roundMoney(running + event.delta);
+        points.push({ ts: event.ts, value: running });
+      }
+    });
+    points.push({ ts: all ? Math.max(now, events[events.length - 1].ts) : now, value: running });
+    return compactTrendPoints(points);
+  }
+
+  function getAssetEvents() {
+    var events = [];
+    state.records.forEach(function (record) {
+      var sign = record.kind === "expense" ? -1 : 1;
+      if (record.kind === "investment") {
+        var profit = Number(record.investmentProfit) || 0;
+        if (profit) {
+          addAssetEvent(events, record.occurredAt, profit);
+        }
+        return;
+      }
+      if (record.settlement === "pending") {
+        if (Array.isArray(record.settlementEvents) && record.settlementEvents.length) {
+          record.settlementEvents.forEach(function (event) {
+            addAssetEvent(events, event.at || record.occurredAt, sign * (Number(event.amount) || 0));
+          });
+          return;
+        }
+        if (Number(record.settledAmount) > 0) {
+          addAssetEvent(events, record.settledAt || record.occurredAt, sign * Number(record.settledAmount));
+        }
+        return;
+      }
+      addAssetEvent(events, record.occurredAt, sign * Number(record.amount || 0));
+    });
+    return events
+      .filter(function (event) { return Number.isFinite(event.ts) && event.delta; })
+      .sort(function (a, b) { return a.ts - b.ts; });
+  }
+
+  function addAssetEvent(events, iso, delta) {
+    var ts = new Date(iso).getTime();
+    if (Number.isFinite(ts) && delta) {
+      events.push({ ts: ts, delta: roundMoney(delta) });
+    }
+  }
+
+  function compactTrendPoints(points) {
+    var byDay = new Map();
+    points.forEach(function (point) {
+      var key = new Date(point.ts).toISOString().slice(0, 10);
+      byDay.set(key, point);
+    });
+    return Array.from(byDay.values()).sort(function (a, b) { return a.ts - b.ts; });
+  }
+
+  function sampleTrendPoints(points, maxCount) {
+    if (points.length <= maxCount) {
+      return points;
+    }
+    var sampled = [];
+    var lastIndex = points.length - 1;
+    for (var i = 0; i < maxCount; i += 1) {
+      sampled.push(points[Math.round(i * lastIndex / (maxCount - 1))]);
+    }
+    return sampled;
+  }
+
+  function handleAssetTrendHover(event) {
+    if (!assetTrendRenderState || !assetTrendRenderState.points.length) {
+      hideAssetTrendTooltip();
+      return;
+    }
+    var rect = els.assetTrendChart.getBoundingClientRect();
+    var stateInfo = assetTrendRenderState;
+    var targetTs = getAssetTrendTimestampFromEvent(event);
+    var nearest = stateInfo.points.reduce(function (best, point) {
+      return Math.abs(point.ts - targetTs) < Math.abs(best.ts - targetTs) ? point : best;
+    }, stateInfo.points[0]);
+    var pointX = stateInfo.padLeft + (nearest.ts - stateInfo.minTs) / (stateInfo.maxTs - stateInfo.minTs) * stateInfo.plotW;
+    var pointY = stateInfo.padTop + (stateInfo.maxValue - nearest.value) / (stateInfo.maxValue - stateInfo.minValue) * stateInfo.plotH;
+    var dragRange = null;
+    if (assetTrendDrag) {
+      assetTrendDrag.currentTs = targetTs;
+      dragRange = normalizeTimestampRange(assetTrendDrag.startTs, assetTrendDrag.currentTs);
+    }
+    drawAssetTrendChart(nearest, dragRange);
+    var tooltip = els.assetTrendTooltip;
+    tooltip.innerHTML = "<strong>" + escapeHtml(formatTrendDate(nearest.ts)) + "</strong><span>" + escapeHtml(privateMoney(nearest.value)) + "</span>";
+    tooltip.classList.remove("hidden");
+    var left = Math.max(8, Math.min(rect.width - 132, pointX + 12));
+    var top = Math.max(8, pointY - 42);
+    tooltip.style.left = Math.round(left) + "px";
+    tooltip.style.top = Math.round(top) + "px";
+  }
+
+  function hideAssetTrendTooltip() {
+    if (assetTrendDrag) {
+      return;
+    }
+    if (els.assetTrendTooltip) {
+      els.assetTrendTooltip.classList.add("hidden");
+    }
+    drawAssetTrendChart();
+  }
+
+  function beginAssetTrendDrag(event) {
+    if (!assetTrendRenderState) {
+      return;
+    }
+    assetTrendDrag = {
+      startTs: getAssetTrendTimestampFromEvent(event),
+      currentTs: getAssetTrendTimestampFromEvent(event)
+    };
+    event.preventDefault();
+  }
+
+  function finishAssetTrendDrag(event) {
+    if (!assetTrendRenderState || !assetTrendDrag) {
+      return;
+    }
+    assetTrendDrag.currentTs = getAssetTrendTimestampFromEvent(event);
+    var range = normalizeTimestampRange(assetTrendDrag.startTs, assetTrendDrag.currentTs);
+    assetTrendDrag = null;
+    applyDateFilterFromTimestamps(range.start, range.end);
+  }
+
+  function getAssetTrendTimestampFromEvent(event) {
+    var stateInfo = assetTrendRenderState;
+    var rect = els.assetTrendChart.getBoundingClientRect();
+    var x = event.clientX - rect.left;
+    var clampedX = Math.max(stateInfo.padLeft, Math.min(rect.width - stateInfo.padRight, x));
+    var ratio = stateInfo.plotW ? (clampedX - stateInfo.padLeft) / stateInfo.plotW : 0;
+    return stateInfo.minTs + ratio * (stateInfo.maxTs - stateInfo.minTs);
+  }
+
+  function normalizeTimestampRange(a, b) {
+    return {
+      start: Math.min(a, b),
+      end: Math.max(a, b)
+    };
+  }
+
+  function applyDateFilterFromTimestamps(startTs, endTs) {
+    var oneDay = 86400000;
+    if (Math.abs(endTs - startTs) < oneDay) {
+      endTs = startTs;
+    }
+    var startDate = dateInputValue(new Date(startTs));
+    var endDate = dateInputValue(new Date(endTs));
+    leaveBatchMode();
+    state.filters.startDate = startDate;
+    state.filters.endDate = endDate;
+    state.filters.pendingView = "";
+    state.pagination.page = 1;
+    els.startDateFilter.value = startDate;
+    els.endDateFilter.value = endDate;
+    openAdvancedFilters();
+    render();
+    showToast(startDate === endDate ? "已筛选 " + startDate + "。" : "已筛选 " + startDate + " 至 " + endDate + "。");
+  }
+
+  function getVisibleDateSelectionRange(minTs, maxTs) {
+    var start = dateFilterStart(state.filters.startDate);
+    var end = dateFilterEnd(state.filters.endDate);
+    if (start == null && end == null) {
+      return null;
+    }
+    start = start == null ? minTs : start;
+    end = end == null ? maxTs : end;
+    if (end < minTs || start > maxTs) {
+      return null;
+    }
+    return {
+      start: Math.max(start, minTs),
+      end: Math.min(end, maxTs)
+    };
   }
 
   function getStructureEntries(kind) {
@@ -1593,7 +1957,7 @@
         return "<button class=\"detail-item\" type=\"button\" data-structure-kind=\"" + escapeHtml(kind) + "\" data-structure-category=\"" + escapeHtml(item.name) + "\">" +
           "<span class=\"detail-color\" style=\"background:" + chartColors[index % chartColors.length] + "\"></span>" +
           "<div><strong>" + escapeHtml(item.name) + "</strong><span>" + percent + "%</span></div>" +
-          "<b>" + escapeHtml(formatMoney(item.value)) + "</b>" +
+          "<b>" + escapeHtml(privateMoney(item.value)) + "</b>" +
           "</button>";
       }).join("");
     }
@@ -1633,6 +1997,15 @@
       els.chartDrawer.classList.add("hidden");
       els.chartDrawer.removeAttribute("data-chart-kind");
     }
+  }
+
+  function toggleAssetVisibility() {
+    state.assetVisible = !state.assetVisible;
+    localStorage.setItem(ASSET_VISIBILITY_KEY, state.assetVisible ? "visible" : "hidden");
+    hideAssetTrendTooltip();
+    renderSummary();
+    renderCharts();
+    refreshChartDrawer();
   }
 
   function setCurrentAsset() {
@@ -1745,6 +2118,36 @@
     els.advancedFilters.classList.add("hidden");
     els.moreFiltersBtn.textContent = "更多筛选";
     els.moreFiltersBtn.setAttribute("aria-expanded", "false");
+  }
+
+  function renderDateFilterControls() {
+    var hasDateFilter = Boolean(state.filters.startDate || state.filters.endDate);
+    els.clearDateFilterBtn.classList.toggle("hidden", !hasDateFilter);
+  }
+
+  function clearDateFilter() {
+    state.filters.startDate = "";
+    state.filters.endDate = "";
+    state.filters.pendingView = "";
+    state.pagination.page = 1;
+    els.startDateFilter.value = "";
+    els.endDateFilter.value = "";
+    if (!hasAnyNonDateFilter()) {
+      closeAdvancedFilters();
+    }
+    render();
+    showToast("已清除时间筛选。");
+  }
+
+  function hasAnyNonDateFilter() {
+    return Boolean(
+      state.filters.kind !== "all" ||
+      state.filters.search ||
+      state.filters.primaryCategory ||
+      state.filters.secondaryCategory ||
+      state.filters.sortBy !== "time" ||
+      state.filters.pendingView
+    );
   }
 
   function resetCategoryFilterLevels() {
@@ -2787,6 +3190,10 @@
     }).format(Number(value) || 0);
   }
 
+  function privateMoney(value) {
+    return state.assetVisible ? formatMoney(value) : "******";
+  }
+
   function signedMoney(value) {
     return (value >= 0 ? "+" : "-") + formatMoney(Math.abs(value));
   }
@@ -2796,6 +3203,28 @@
       return (value / 10000).toFixed(1) + "万";
     }
     return String(Math.round(value));
+  }
+
+  function formatShortDate(value) {
+    return new Intl.DateTimeFormat("zh-CN", {
+      month: "2-digit",
+      day: "2-digit"
+    }).format(value);
+  }
+
+  function dateInputValue(date) {
+    var year = date.getFullYear();
+    var month = String(date.getMonth() + 1).padStart(2, "0");
+    var day = String(date.getDate()).padStart(2, "0");
+    return year + "-" + month + "-" + day;
+  }
+
+  function formatTrendDate(ts) {
+    return new Intl.DateTimeFormat("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(new Date(ts));
   }
 
   function formatDateTime(iso) {
