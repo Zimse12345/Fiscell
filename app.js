@@ -8,7 +8,7 @@
   var FALLBACK_IMPORT_PROMPT = [
     "# Fiscell 账单转换 JSON 提示词",
     "",
-    "你是 Fiscell v1.0.30 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
+    "你是 Fiscell v1.1.5 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
     "",
     "输出 JSON：{\"app\":\"local-ledger\",\"version\":4,\"records\":[{\"id\":\"\",\"occurredAt\":\"2026-06-21T12:30:00+08:00\",\"kind\":\"income | expense | investment\",\"amount\":12.34,\"category\":\"分类\",\"project\":\"仅理财记录填写\",\"target\":\"仅理财记录填写二级分类或具体标的\",\"settlement\":\"none | pending\",\"settledAmount\":0,\"settledAt\":\"\",\"investmentProfit\":0,\"closedAt\":\"\",\"note\":\"备注\",\"tags\":[]}]}",
     "",
@@ -33,6 +33,52 @@
     "其他": ["其他"]
   };
   var chartColors = ["#2468d8", "#d84a3a", "#1f9d70", "#7a5bd7", "#e28b22", "#188a9c", "#8b6b28", "#5f7085"];
+  var SMART_CATEGORY_THRESHOLD = 0.8;
+  var smartCategoryLexicons = {
+    "餐饮": {
+      "食堂": 1, "餐厅": 1, "饭店": 1, "餐费": 1, "饭费": 1, "用餐": 1, "就餐": 1, "堂食": 1, "外卖": 1, "美团外卖": 1, "饿了么": 1, "大众点评": 0.9,
+      "早餐": 1, "早饭": 1, "午餐": 1, "午饭": 1, "晚餐": 1, "晚饭": 1, "宵夜": 1, "夜宵": 1, "快餐": 1, "小吃": 1, "盒饭": 1, "便当": 1,
+      "汉堡": 1, "热狗": 1, "披萨": 1, "薯条": 1, "炸鸡": 1, "鸡排": 1, "鸡腿": 1, "鸡翅": 1, "烤鸡": 1, "烤鸭": 1, "牛肉": 0.9, "牛排": 1, "羊肉": 0.9,
+      "火锅": 1, "麻辣烫": 1, "冒菜": 1, "串串": 1, "烧烤": 1, "烤肉": 1, "烤串": 1, "烤鱼": 1, "鱼粉": 1, "鱼丸": 1, "酸菜鱼": 1, "水煮鱼": 1,
+      "小面": 1, "面馆": 1, "拉面": 1, "牛肉面": 1, "拌面": 1, "炒面": 1, "刀削面": 1, "重庆小面": 1, "热干面": 1, "米粉": 1, "米线": 1, "粉丝": 0.9, "酸辣粉": 1,
+      "炒饭": 1, "盖饭": 1, "煲仔饭": 1, "黄焖鸡": 1, "麻辣香锅": 1, "沙县": 1, "兰州拉面": 1, "煎饼": 1, "煎饼果子": 1, "馅饼": 1, "肉夹馍": 1,
+      "包子": 1, "小笼包": 1, "生煎": 1, "锅贴": 1, "饺子": 1, "馄饨": 1, "抄手": 1, "云吞": 1, "粥": 0.95, "豆浆": 1, "油条": 1, "烧麦": 1,
+      "寿司": 1, "日料": 1, "韩餐": 1, "韩式": 0.9, "西餐": 1, "自助餐": 1, "料理": 0.9, "轻食": 1, "沙拉": 0.95, "三明治": 1,
+      "奶茶": 1, "咖啡": 1, "茶饮": 1, "果茶": 1, "甜品": 1, "蛋糕": 1, "面包": 1, "烘焙": 1, "冰淇淋": 1, "雪糕": 1, "饮品": 0.9, "水果": 0.9, "果切": 1, "鲜果": 0.9,
+      "肯德基": 1, "麦当劳": 1, "必胜客": 1, "德克士": 1, "汉堡王": 1, "塔斯汀": 1, "华莱士": 1, "达美乐": 1,
+      "星巴克": 1, "瑞幸": 1, "库迪": 1, "Manner": 1, "Tims": 1, "Costa": 1,
+      "喜茶": 1, "奈雪": 1, "蜜雪": 1, "蜜雪冰城": 1, "霸王茶姬": 1, "古茗": 1, "茶百道": 1, "一点点": 1, "沪上阿姨": 1, "CoCo": 1, "书亦烧仙草": 1, "益禾堂": 1, "快乐柠檬": 1,
+      "海底捞": 1, "呷哺": 1, "凑凑": 1, "西贝": 1, "老乡鸡": 1, "乡村基": 1, "真功夫": 1, "吉野家": 1, "和府捞面": 1, "袁记云饺": 1, "遇见小面": 1, "杨国福": 1, "张亮麻辣烫": 1,
+      "巴比": 1, "鲍师傅": 1, "85度C": 1, "好利来": 1, "巴黎贝甜": 1, "元祖": 1, "DQ": 1, "哈根达斯": 1
+    },
+    "交通": {
+      "地铁": 1, "公交": 1, "打车": 1, "出租车": 1, "网约车": 1, "滴滴": 1, "高德打车": 1, "哈啰": 0.9, "单车": 1, "骑行": 0.95,
+      "火车票": 1, "高铁": 1, "动车": 1, "机票": 1, "机场": 0.9, "停车": 0.85, "加油": 0.9, "高速": 0.9, "过路费": 1, "轨道交通": 1,
+      "公交卡": 1, "交通卡": 1, "轮渡": 1, "车票": 0.9
+    },
+    "购物": {
+      "淘宝": 1, "天猫": 1, "京东": 1, "拼多多": 1, "闲鱼": 1, "抖音商城": 1, "百货": 0.9, "超市": 0.9, "便利店": 0.9,
+      "数码": 0.9, "电器": 0.9, "服饰": 0.9, "衣服": 0.9, "裤子": 0.9, "鞋": 0.85, "包": 0.85, "化妆品": 0.9, "护肤": 0.9,
+      "日用品": 0.85, "文具": 0.85, "药妆": 0.9, "网购": 0.9, "零售": 0.85, "旗舰店": 0.9, "专卖店": 0.9, "商场": 0.9, "小卖部": 0.85
+    },
+    "学习": {
+      "教育": 0.9, "课程": 0.9, "培训": 0.9, "学费": 1, "考试": 0.95, "教材": 1, "书籍": 0.9, "图书": 0.9, "论文": 0.9,
+      "网课": 1, "课堂": 0.9, "学习": 0.85, "报名费": 0.9, "资料": 0.8, "文献": 0.9, "学校": 0.9, "学院": 0.9
+    },
+    "娱乐": {
+      "游戏": 1, "Games": 1, "电影": 1, "影院": 1, "会员": 0.85, "音乐": 0.9, "视频": 0.85, "直播": 0.9, "App Store": 0.9, "Apple Music": 1,
+      "Steam": 1, "米哈游": 1, "miHoYo": 1, "腾讯视频": 1, "爱奇艺": 1, "优酷": 1, "哔哩": 1, "B站": 1, "演出": 1, "门票": 0.9,
+      "运动": 0.85, "健身": 0.9, "赛事": 0.9, "娱乐": 0.9, "文化休闲": 0.9
+    },
+    "医疗": {
+      "医院": 1, "药房": 1, "药店": 1, "挂号": 1, "门诊": 1, "体检": 1, "医保": 1, "医疗": 0.95, "健康": 0.85,
+      "诊疗": 1, "牙科": 1, "眼科": 1, "处方": 1, "药品": 1
+    },
+    "生活": {
+      "话费": 1, "水费": 1, "电费": 1, "燃气": 1, "物业": 1, "房租": 1, "宽带": 1, "充值": 0.85, "缴费": 0.9,
+      "生活服务": 0.9, "保险": 0.9, "理发": 0.95, "洗衣": 0.95, "维修": 0.9, "快递": 0.85, "家政": 0.95, "打印": 0.85, "证件": 0.85, "停车费": 0.85
+    }
+  };
 
   var state = {
     records: [],
@@ -66,10 +112,29 @@
     },
     importMode: "merge"
   };
+  mergeLexiconTerms(smartCategoryLexicons["餐饮"], {
+    "土豆": 0.85, "番茄": 0.85, "西红柿": 0.85, "糕点": 1, "饼干": 1, "曲奇": 1, "蛋挞": 1, "蛋卷": 1, "泡芙": 1, "慕斯": 1, "布丁": 1, "巧克力": 1,
+    "糖果": 0.95, "口香糖": 0.9, "饮料": 0.9, "可乐": 0.9, "雪碧": 0.9, "果汁": 0.9, "酸奶": 0.9, "牛奶": 0.85, "豆奶": 0.9, "椰汁": 0.9, "凉茶": 0.9, "矿泉水": 0.85,
+    "苏打水": 0.9, "啤酒": 0.9, "红酒": 0.9, "白酒": 0.9, "鸡尾酒": 0.9, "米饭": 0.9, "白米饭": 1, "菜饭": 1, "蛋炒饭": 1, "卤肉饭": 1, "猪脚饭": 1, "烧腊饭": 1,
+    "肥牛饭": 1, "咖喱饭": 1, "石锅拌饭": 1, "拌饭": 1, "便餐": 1, "套餐": 0.95, "单人餐": 1, "双人餐": 1, "点餐": 1, "加餐": 1, "订餐": 1, "团餐": 1,
+    "餐饮": 1, "餐饮店": 1, "餐饮服务": 1, "餐馆": 1, "菜馆": 1, "小馆": 0.9, "大排档": 1, "美食": 0.95, "餐吧": 1, "酒楼": 1, "茶餐厅": 1, "粤菜": 1,
+    "川菜": 1, "湘菜": 1, "鲁菜": 1, "淮扬菜": 1, "东北菜": 1, "江浙菜": 1, "本帮菜": 1, "新疆菜": 1, "清真": 0.85, "烧腊": 1, "卤味": 1, "卤菜": 1,
+    "熟食": 0.95, "烧鹅": 1, "叉烧": 1, "烤肠": 1, "香肠": 0.9, "火腿": 0.85, "培根": 0.9, "猪肉": 0.85, "排骨": 0.9, "五花肉": 0.9, "肉丸": 0.9, "鸭脖": 1,
+    "鸭腿": 1, "鸭翅": 1, "鸭货": 1, "鹅肉": 0.9, "鱼香肉丝": 1, "宫保鸡丁": 1, "回锅肉": 1, "红烧肉": 1, "水煮肉": 1, "酸辣土豆丝": 1, "土豆粉": 1, "土豆泥": 0.95,
+    "番茄炒蛋": 1, "西红柿炒蛋": 1, "蛋花汤": 1, "汤": 0.8, "粥铺": 1, "汤包": 1, "馒头": 0.95, "花卷": 0.95, "烧饼": 1, "手抓饼": 1, "葱油饼": 1, "鸡蛋灌饼": 1,
+    "铁板烧": 1, "砂锅": 1, "砂锅粉": 1, "砂锅粥": 1, "螺蛳粉": 1, "桂林米粉": 1, "过桥米线": 1, "河粉": 1, "肠粉": 1, "粿条": 1, "粉面": 0.95, "炸酱面": 1,
+    "油泼面": 1, "臊子面": 1, "米皮": 1, "凉皮": 1, "凉面": 1, "担担面": 1, "宜宾燃面": 1, "关东煮": 1, "章鱼烧": 1, "炸串": 1, "炸物": 0.9, "炸薯": 1,
+    "薯饼": 1, "鸡米花": 1, "鸡块": 1, "鸡柳": 1, "鸡爪": 1, "鸡胸": 0.85, "鸡肉卷": 1, "墨西哥卷": 1, "卷饼": 1, "塔可": 1, "烤冷面": 1
+  });
 
   var els = {};
   var toastTimer = null;
   var resizeTimer = null;
+  var smartClassifyJob = {
+    records: [],
+    sourceRecords: [],
+    running: false
+  };
 
   document.addEventListener("DOMContentLoaded", init);
 
@@ -142,6 +207,7 @@
     els.pendingBannerText = document.getElementById("pendingBannerText");
     els.clearPendingViewBtn = document.getElementById("clearPendingViewBtn");
     els.visibleCount = document.getElementById("visibleCount");
+    els.smartClassifyBtn = document.getElementById("smartClassifyBtn");
     els.batchTools = document.getElementById("batchTools");
     els.batchToggleBtn = document.getElementById("batchToggleBtn");
     els.selectAllBtn = document.getElementById("selectAllBtn");
@@ -174,6 +240,15 @@
     els.secondaryCategoryOptions = document.getElementById("secondaryCategoryOptions");
     els.toast = document.getElementById("toast");
     els.actionMenu = document.getElementById("actionMenu");
+    els.smartClassifyOverlay = document.getElementById("smartClassifyOverlay");
+    els.smartClassifyMessage = document.getElementById("smartClassifyMessage");
+    els.smartClassifyProgressWrap = document.getElementById("smartClassifyProgressWrap");
+    els.smartClassifyProgressBar = document.getElementById("smartClassifyProgressBar");
+    els.smartClassifyProgressText = document.getElementById("smartClassifyProgressText");
+    els.smartClassifyOnlyOther = document.getElementById("smartClassifyOnlyOther");
+    els.smartClassifyActions = document.getElementById("smartClassifyActions");
+    els.smartClassifyCancelBtn = document.getElementById("smartClassifyCancelBtn");
+    els.smartClassifyConfirmBtn = document.getElementById("smartClassifyConfirmBtn");
   }
 
   function bindEvents() {
@@ -266,6 +341,10 @@
       togglePendingView("expense");
     });
     els.clearPendingViewBtn.addEventListener("click", resetViewFilters);
+    els.smartClassifyBtn.addEventListener("click", smartClassifyFilteredRecords);
+    els.smartClassifyOnlyOther.addEventListener("change", updateSmartClassifyPreview);
+    els.smartClassifyCancelBtn.addEventListener("click", closeSmartClassifyDialog);
+    els.smartClassifyConfirmBtn.addEventListener("click", runSmartClassifyJob);
     els.setAssetBtn.addEventListener("click", setCurrentAsset);
     els.clearAllBtn.addEventListener("click", clearAll);
     els.importBtn.addEventListener("click", function (event) {
@@ -557,6 +636,12 @@
     if (existingIndex >= 0) {
       var existing = state.records[existingIndex];
       record.createdAt = existing.createdAt || nowIso;
+      if (existing.kind === "investment" && record.kind === "investment") {
+        record.closedAt = existing.closedAt || "";
+      }
+      if (existing.settlement === "pending" && record.kind !== "investment") {
+        record.settlement = "pending";
+      }
       record.settledAmount = record.settlement === "pending" ? clampMoney(existing.settledAmount || 0, 0, record.amount) : 0;
       record.settlementEvents = record.settlement === "pending" ? (existing.settlementEvents || []) : [];
       record.settledAt = record.settlement === "pending" && record.settledAmount >= record.amount ? (existing.settledAt || nowIso) : "";
@@ -582,7 +667,7 @@
     var action = button.getAttribute("data-action");
     if (action === "more") {
       var menuRecord = findRecord(id);
-      if (!menuRecord || isRecordLocked(menuRecord)) {
+      if (!menuRecord) {
         closeActionMenu();
         return;
       }
@@ -640,7 +725,7 @@
       return;
     }
     var record = findRecord(row.getAttribute("data-row-id"));
-    if (record && !isRecordLocked(record)) {
+    if (record) {
       leaveBatchMode();
       editRecord(record);
     }
@@ -659,9 +744,6 @@
     }
     var action = button.getAttribute("data-menu-action");
     closeActionMenu();
-    if (isRecordLocked(record)) {
-      return;
-    }
     if (action === "edit") {
       leaveBatchMode();
       editRecord(record);
@@ -738,10 +820,6 @@
     els.importFile.click();
   }
 
-  function isRecordLocked(record) {
-    return Boolean(record && ((record.kind === "investment" && record.closedAt) || record.settlement === "pending"));
-  }
-
   function copyRecord(record) {
     leaveBatchMode();
     var clone = Object.assign({}, record, {
@@ -807,9 +885,6 @@
 
   function editRecord(record) {
     leaveBatchMode();
-    if (isRecordLocked(record)) {
-      return;
-    }
     els.recordId.value = record.id;
     setSelectedKind(record.kind);
     state.activeFormKind = record.kind;
@@ -1139,6 +1214,177 @@
 
   function startsWithText(value, prefix) {
     return cleanText(value).toLowerCase().indexOf(cleanText(prefix).toLowerCase()) === 0;
+  }
+
+  function smartClassifyFilteredRecords() {
+    if (smartClassifyJob.running) {
+      return;
+    }
+    leaveBatchMode();
+    var records = getFilteredRecords().filter(function (record) {
+      return record.kind === "income" || record.kind === "expense";
+    });
+    if (!records.length) {
+      showToast("当前筛选结果没有可归类的收入或支出条目。");
+      return;
+    }
+
+    smartClassifyJob.sourceRecords = records;
+    els.smartClassifyOnlyOther.checked = true;
+    els.smartClassifyProgressWrap.classList.add("hidden");
+    els.smartClassifyActions.classList.remove("hidden");
+    els.smartClassifyProgressBar.style.width = "0%";
+    els.smartClassifyOverlay.classList.remove("hidden");
+    els.smartClassifyOverlay.setAttribute("aria-hidden", "false");
+    updateSmartClassifyPreview();
+  }
+
+  function closeSmartClassifyDialog() {
+    if (smartClassifyJob.running) {
+      return;
+    }
+    smartClassifyJob.records = [];
+    smartClassifyJob.sourceRecords = [];
+    els.smartClassifyOverlay.classList.add("hidden");
+    els.smartClassifyOverlay.setAttribute("aria-hidden", "true");
+  }
+
+  function runSmartClassifyJob() {
+    if (smartClassifyJob.running) {
+      return;
+    }
+    smartClassifyJob.records = getSmartClassifyTargetRecords();
+    if (!smartClassifyJob.records.length) {
+      showToast("没有符合条件的其他分类条目。");
+      return;
+    }
+    smartClassifyJob.running = true;
+    els.smartClassifyActions.classList.add("hidden");
+    els.smartClassifyProgressWrap.classList.remove("hidden");
+    els.smartClassifyMessage.textContent = "正在智能归类，请等待完成。";
+    setSmartClassifyProgress(0, smartClassifyJob.records.length);
+    processSmartClassifyChunk(0, 0, 0);
+  }
+
+  function processSmartClassifyChunk(startIndex, changed, otherCount) {
+    var records = smartClassifyJob.records;
+    var total = records.length;
+    var nowIso = new Date().toISOString();
+    var endIndex = Math.min(startIndex + 50, total);
+    for (var index = startIndex; index < endIndex; index += 1) {
+      var record = records[index];
+      var nextCategory = classifyRecordByLexicon(record);
+      if (nextCategory === "其他") {
+        otherCount += 1;
+      }
+      if (record.category !== nextCategory) {
+        record.category = nextCategory;
+        record.updatedAt = nowIso;
+        changed += 1;
+      }
+    }
+
+    setSmartClassifyProgress(endIndex, total);
+    if (endIndex < total) {
+      window.setTimeout(function () {
+        processSmartClassifyChunk(endIndex, changed, otherCount);
+      }, 20);
+      return;
+    }
+
+    finishSmartClassifyJob(changed, otherCount);
+  }
+
+  function finishSmartClassifyJob(changed, otherCount) {
+    smartClassifyJob.running = false;
+    smartClassifyJob.records = [];
+    smartClassifyJob.sourceRecords = [];
+    if (changed) {
+      saveRecords();
+      fillDatalists();
+      refreshAdvancedFilterOptions();
+      render();
+    }
+    closeSmartClassifyDialog();
+    if (!changed) {
+      showToast("智能归类完成，没有需要修改的分类。");
+      return;
+    }
+    showToast("智能归类完成：更新 " + changed + " 条，归为其他 " + otherCount + " 条。");
+  }
+
+  function setSmartClassifyProgress(done, total) {
+    var percent = total ? Math.round((done / total) * 100) : 0;
+    els.smartClassifyProgressBar.style.width = percent + "%";
+    els.smartClassifyProgressText.textContent = done + " / " + total;
+  }
+
+  function updateSmartClassifyPreview() {
+    var targets = getSmartClassifyTargetRecords();
+    var onlyOther = els.smartClassifyOnlyOther.checked;
+    var suffix = onlyOther ? "（仅其他分类）" : "";
+    els.smartClassifyMessage.textContent = "你将会对 " + targets.length + " 条账目进行智能分类" + suffix + "，不保证精准性。确认后开始分类。";
+    els.smartClassifyProgressText.textContent = "0 / " + targets.length;
+    els.smartClassifyConfirmBtn.disabled = targets.length === 0;
+  }
+
+  function getSmartClassifyTargetRecords() {
+    var records = smartClassifyJob.sourceRecords || [];
+    if (!els.smartClassifyOnlyOther.checked) {
+      return records.slice();
+    }
+    return records.filter(function (record) {
+      return cleanText(record.category) === "其他";
+    });
+  }
+
+  function mergeLexiconTerms(target, additions) {
+    Object.keys(additions).forEach(function (keyword) {
+      target[keyword] = additions[keyword];
+    });
+  }
+
+  function classifyRecordByLexicon(record) {
+    if (record.kind === "income") {
+      return scoreTextForCategory(buildClassificationText(record), {
+        "工资": { "工资": 1, "薪资": 1, "薪水": 1, "劳务": 0.9, "奖金": 0.9, "绩效": 0.9 },
+        "其他": {}
+      }, "其他");
+    }
+    return scoreTextForCategory(buildClassificationText(record), smartCategoryLexicons, "其他");
+  }
+
+  function buildClassificationText(record) {
+    return [
+      record.category,
+      record.project,
+      record.target,
+      record.note,
+      (record.tags || []).join(" ")
+    ].join(" ").toLowerCase();
+  }
+
+  function scoreTextForCategory(text, lexicons, fallback) {
+    var bestCategory = fallback;
+    var bestScore = 0;
+    var tied = false;
+    Object.keys(lexicons).forEach(function (category) {
+      var score = 0;
+      Object.keys(lexicons[category]).forEach(function (keyword) {
+        if (text.indexOf(String(keyword).toLowerCase()) >= 0) {
+          score += Number(lexicons[category][keyword]) || 0;
+        }
+      });
+      score = Math.min(1, score);
+      if (score > bestScore) {
+        bestScore = score;
+        bestCategory = category;
+        tied = false;
+      } else if (score > 0 && score === bestScore) {
+        tied = true;
+      }
+    });
+    return bestScore >= SMART_CATEGORY_THRESHOLD && !tied ? bestCategory : fallback;
   }
 
   function getPagedRecords(records) {
