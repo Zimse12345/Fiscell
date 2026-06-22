@@ -16,7 +16,7 @@
         </svg>
         <div>
           <h1>Fiscell</h1>
-          <p class="eyebrow">v1.1.5 · author:Zimse</p>
+          <p class="eyebrow">v1.1.7 · author:Zimse</p>
         </div>
         <a class="repo-link" href="https://github.com/Zimse12345/Fiscell" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
@@ -30,6 +30,7 @@
           <div id="importMenu" class="header-menu hidden">
             <button id="importReplaceBtn" type="button">覆盖</button>
             <button id="importMergeBtn" type="button">合并</button>
+            <button id="importGuideBtn" type="button">说明</button>
           </div>
         </div>
         <div class="header-menu-wrap">
@@ -39,7 +40,6 @@
             <button id="exportCsvBtn" type="button">CSV</button>
           </div>
         </div>
-        <button id="copyPromptBtn" class="secondary" type="button" title="复制账单转换提示词">复制提示词</button>
         <input id="importFile" class="hidden-file-input" type="file" accept="application/json,text/csv,.json,.csv">
       </div>
     </header>
@@ -225,6 +225,17 @@
                   <button id="clearSelectionBtn" class="secondary" type="button">清除</button>
                   <button id="deleteSelectedBtn" class="danger" type="button">删除</button>
                   <div class="batch-menu-wrap">
+                    <button id="batchCategoryBtn" class="secondary" type="button" aria-expanded="false">设置分类</button>
+                    <div id="batchCategoryMenu" class="header-menu batch-category-menu hidden">
+                      <label class="batch-category-field">
+                        <span>分类</span>
+                        <input id="batchCategoryInput" list="batchCategoryOptions" placeholder="输入分类">
+                      </label>
+                      <datalist id="batchCategoryOptions"></datalist>
+                      <button id="applyBatchCategoryBtn" type="button">确认</button>
+                    </div>
+                  </div>
+                  <div class="batch-menu-wrap">
                     <button id="exportSelectedBtn" class="secondary" type="button" aria-expanded="false">导出</button>
                     <div id="batchExportMenu" class="header-menu batch-export-menu hidden">
                       <button id="exportSelectedJsonBtn" type="button">JSON</button>
@@ -336,6 +347,20 @@
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="importGuideOverlay" class="import-guide-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="importGuideTitle" aria-hidden="true">
+      <div class="import-guide-dialog">
+        <div class="panel-heading">
+          <h2 id="importGuideTitle">导入说明</h2>
+          <button id="importGuideCloseBtn" class="icon-text" type="button">关闭</button>
+        </div>
+        <ol>
+          <li>优先导入 Fiscell 导出的 JSON；需要保留当前账本时选择“合并”，需要重建账本时选择“覆盖”。</li>
+          <li>微信、支付宝、银行等表格可先交给 AI，使用账单转换提示词生成 Fiscell JSON。</li>
+          <li>导入后可用“智能归类”整理其他分类，再用批量选择修正分类。</li>
+        </ol>
+        <button id="importGuideCopyPromptBtn" type="button">复制转换提示词</button>
+      </div>
+    </div>
     <div id="smartClassifyOverlay" class="smart-classify-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="smartClassifyTitle" aria-hidden="true">
       <div class="smart-classify-dialog">
         <h2 id="smartClassifyTitle">智能归类</h2>

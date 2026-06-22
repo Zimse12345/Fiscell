@@ -8,7 +8,7 @@
   var FALLBACK_IMPORT_PROMPT = [
     "# Fiscell 账单转换 JSON 提示词",
     "",
-    "你是 Fiscell v1.1.5 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
+    "你是 Fiscell v1.1.7 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
     "",
     "输出 JSON：{\"app\":\"local-ledger\",\"version\":4,\"records\":[{\"id\":\"\",\"occurredAt\":\"2026-06-21T12:30:00+08:00\",\"kind\":\"income | expense | investment\",\"amount\":12.34,\"category\":\"分类\",\"project\":\"仅理财记录填写\",\"target\":\"仅理财记录填写二级分类或具体标的\",\"settlement\":\"none | pending\",\"settledAmount\":0,\"settledAt\":\"\",\"investmentProfit\":0,\"closedAt\":\"\",\"note\":\"备注\",\"tags\":[]}]}",
     "",
@@ -186,9 +186,9 @@
     els.importMenu = document.getElementById("importMenu");
     els.importReplaceBtn = document.getElementById("importReplaceBtn");
     els.importMergeBtn = document.getElementById("importMergeBtn");
+    els.importGuideBtn = document.getElementById("importGuideBtn");
     els.exportBtn = document.getElementById("exportBtn");
     els.exportMenu = document.getElementById("exportMenu");
-    els.copyPromptBtn = document.getElementById("copyPromptBtn");
     els.exportJsonBtn = document.getElementById("exportJsonBtn");
     els.exportCsvBtn = document.getElementById("exportCsvBtn");
     els.setAssetBtn = document.getElementById("setAssetBtn");
@@ -213,6 +213,11 @@
     els.selectAllBtn = document.getElementById("selectAllBtn");
     els.clearSelectionBtn = document.getElementById("clearSelectionBtn");
     els.deleteSelectedBtn = document.getElementById("deleteSelectedBtn");
+    els.batchCategoryBtn = document.getElementById("batchCategoryBtn");
+    els.batchCategoryMenu = document.getElementById("batchCategoryMenu");
+    els.batchCategoryInput = document.getElementById("batchCategoryInput");
+    els.batchCategoryOptions = document.getElementById("batchCategoryOptions");
+    els.applyBatchCategoryBtn = document.getElementById("applyBatchCategoryBtn");
     els.exportSelectedBtn = document.getElementById("exportSelectedBtn");
     els.batchExportMenu = document.getElementById("batchExportMenu");
     els.exportSelectedJsonBtn = document.getElementById("exportSelectedJsonBtn");
@@ -239,6 +244,9 @@
     els.primaryCategoryOptions = document.getElementById("primaryCategoryOptions");
     els.secondaryCategoryOptions = document.getElementById("secondaryCategoryOptions");
     els.toast = document.getElementById("toast");
+    els.importGuideOverlay = document.getElementById("importGuideOverlay");
+    els.importGuideCloseBtn = document.getElementById("importGuideCloseBtn");
+    els.importGuideCopyPromptBtn = document.getElementById("importGuideCopyPromptBtn");
     els.actionMenu = document.getElementById("actionMenu");
     els.smartClassifyOverlay = document.getElementById("smartClassifyOverlay");
     els.smartClassifyMessage = document.getElementById("smartClassifyMessage");
@@ -357,11 +365,18 @@
     els.importMergeBtn.addEventListener("click", function () {
       beginImport("merge");
     });
+    els.importGuideBtn.addEventListener("click", openImportGuide);
     els.exportBtn.addEventListener("click", function (event) {
       event.stopPropagation();
       toggleHeaderMenu("export");
     });
-    els.copyPromptBtn.addEventListener("click", copyImportPrompt);
+    els.importGuideCloseBtn.addEventListener("click", closeImportGuide);
+    els.importGuideCopyPromptBtn.addEventListener("click", copyImportPrompt);
+    els.importGuideOverlay.addEventListener("click", function (event) {
+      if (event.target === els.importGuideOverlay) {
+        closeImportGuide();
+      }
+    });
     els.exportJsonBtn.addEventListener("click", function () {
       closeHeaderMenus();
       exportJson();
@@ -378,6 +393,17 @@
     els.selectAllBtn.addEventListener("click", selectAllVisibleRecords);
     els.clearSelectionBtn.addEventListener("click", clearBatchSelection);
     els.deleteSelectedBtn.addEventListener("click", deleteSelectedRecords);
+    els.batchCategoryBtn.addEventListener("click", function (event) {
+      event.stopPropagation();
+      toggleBatchCategoryMenu();
+    });
+    els.applyBatchCategoryBtn.addEventListener("click", applyBatchCategory);
+    els.batchCategoryInput.addEventListener("keydown", function (event) {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyBatchCategory();
+      }
+    });
     els.exportSelectedBtn.addEventListener("click", function (event) {
       event.stopPropagation();
       toggleBatchExportMenu();
@@ -435,6 +461,7 @@
         openChartDrawer(box.getAttribute("data-chart-detail"));
       });
     });
+    els.chartDrawerBody.addEventListener("click", handleChartDrawerClick);
     els.investmentProject.addEventListener("input", fillDatalists);
     document.addEventListener("click", function (event) {
       if (!event.target.closest(".combo-field")) {
@@ -451,6 +478,7 @@
       }
       if (!event.target.closest(".batch-menu-wrap")) {
         closeBatchExportMenu();
+        closeBatchCategoryMenu();
       }
     });
     window.addEventListener("resize", function () {
@@ -811,6 +839,17 @@
       els.exportMenu.classList.add("hidden");
       els.exportBtn.setAttribute("aria-expanded", "false");
     }
+  }
+
+  function openImportGuide() {
+    closeHeaderMenus();
+    els.importGuideOverlay.classList.remove("hidden");
+    els.importGuideOverlay.setAttribute("aria-hidden", "false");
+  }
+
+  function closeImportGuide() {
+    els.importGuideOverlay.classList.add("hidden");
+    els.importGuideOverlay.setAttribute("aria-hidden", "true");
   }
 
   function beginImport(mode) {
@@ -1551,17 +1590,42 @@
     } else {
       els.chartDrawerBody.innerHTML = entries.map(function (item, index) {
         var percent = total ? Math.round(item.value / total * 100) : 0;
-        return "<div class=\"detail-item\">" +
+        return "<button class=\"detail-item\" type=\"button\" data-structure-kind=\"" + escapeHtml(kind) + "\" data-structure-category=\"" + escapeHtml(item.name) + "\">" +
           "<span class=\"detail-color\" style=\"background:" + chartColors[index % chartColors.length] + "\"></span>" +
           "<div><strong>" + escapeHtml(item.name) + "</strong><span>" + percent + "%</span></div>" +
           "<b>" + escapeHtml(formatMoney(item.value)) + "</b>" +
-          "</div>";
+          "</button>";
       }).join("");
     }
     if (sourceBox) {
       var alignedTop = sourceBox.offsetTop + sourceBox.offsetHeight - els.chartDrawer.offsetHeight;
       els.chartDrawer.style.top = Math.round(alignedTop) + "px";
     }
+  }
+
+  function handleChartDrawerClick(event) {
+    var item = event.target.closest("[data-structure-category]");
+    if (!item) {
+      return;
+    }
+    applyStructureCategoryFilter(item.getAttribute("data-structure-kind"), item.getAttribute("data-structure-category"));
+  }
+
+  function applyStructureCategoryFilter(kind, category) {
+    var selectedKind = category === "理财" ? "investment" : kind;
+    leaveBatchMode();
+    state.filters.kind = selectedKind;
+    state.filters.pendingView = "";
+    state.filters.primaryCategory = selectedKind === "investment" ? "" : category;
+    state.filters.secondaryCategory = "";
+    state.pagination.page = 1;
+    els.kindFilter.value = selectedKind;
+    els.primaryCategoryFilter.value = state.filters.primaryCategory;
+    els.secondaryCategoryFilter.value = "";
+    openAdvancedFilters();
+    refreshAdvancedFilterOptions();
+    render();
+    showToast("已筛选“" + category + "”。");
   }
 
   function closeChartDrawer() {
@@ -1665,12 +1729,16 @@
 
   function toggleAdvancedFilters() {
     if (els.advancedFilters.classList.contains("hidden")) {
-      els.advancedFilters.classList.remove("hidden");
-      els.moreFiltersBtn.textContent = "清空筛选";
-      els.moreFiltersBtn.setAttribute("aria-expanded", "true");
+      openAdvancedFilters();
       return;
     }
     resetViewFilters();
+  }
+
+  function openAdvancedFilters() {
+    els.advancedFilters.classList.remove("hidden");
+    els.moreFiltersBtn.textContent = "清空筛选";
+    els.moreFiltersBtn.setAttribute("aria-expanded", "true");
   }
 
   function closeAdvancedFilters() {
@@ -1766,6 +1834,7 @@
     state.batch.selectedIds.clear();
     closeActionMenu();
     closeBatchExportMenu();
+    closeBatchCategoryMenu();
   }
 
   function renderBatchControls(records, totalRecords) {
@@ -1778,9 +1847,11 @@
     els.selectAllBtn.disabled = !records.length;
     els.clearSelectionBtn.disabled = !selectedCount;
     els.deleteSelectedBtn.disabled = !selectedCount;
+    els.batchCategoryBtn.disabled = !selectedCount;
     els.exportSelectedBtn.disabled = !selectedCount;
     if (!state.batch.enabled || !selectedCount) {
       closeBatchExportMenu();
+      closeBatchCategoryMenu();
     }
   }
 
@@ -1828,6 +1899,89 @@
     showToast("已删除 " + ids.length + " 条记录。");
   }
 
+  function toggleBatchCategoryMenu() {
+    if (!state.batch.selectedIds.size) {
+      showToast("请先选择要设置分类的记录。");
+      return;
+    }
+    var editableRecords = getSelectedRecords().filter(function (record) {
+      return record.kind === "income" || record.kind === "expense";
+    });
+    if (!editableRecords.length) {
+      showToast("选中的记录没有可设置分类的收入或支出。");
+      return;
+    }
+    var willOpen = els.batchCategoryMenu.classList.contains("hidden");
+    closeHeaderMenus();
+    closeActionMenu();
+    closeBatchExportMenu();
+    closeBatchCategoryMenu();
+    if (willOpen) {
+      fillDatalistOptions(els.batchCategoryOptions, getBatchCategoryOptions());
+      els.batchCategoryInput.value = "";
+      els.batchCategoryMenu.classList.remove("hidden");
+      els.batchCategoryBtn.setAttribute("aria-expanded", "true");
+      window.setTimeout(function () {
+        els.batchCategoryInput.focus();
+      }, 0);
+    }
+  }
+
+  function closeBatchCategoryMenu() {
+    if (els.batchCategoryMenu) {
+      els.batchCategoryMenu.classList.add("hidden");
+      els.batchCategoryBtn.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  function applyBatchCategory() {
+    var category = cleanText(els.batchCategoryInput.value) || "其他";
+    var nowIso = new Date().toISOString();
+    var changed = 0;
+    var skipped = 0;
+    getSelectedRecords().forEach(function (record) {
+      if (record.kind !== "income" && record.kind !== "expense") {
+        skipped += 1;
+        return;
+      }
+      if (record.category !== category) {
+        record.category = category;
+        record.updatedAt = nowIso;
+        changed += 1;
+      }
+    });
+    closeBatchCategoryMenu();
+    if (!changed) {
+      showToast(skipped ? "没有需要修改的收入或支出分类，已跳过理财记录。" : "没有需要修改的分类。");
+      return;
+    }
+    leaveBatchMode();
+    saveRecords();
+    fillDatalists();
+    refreshAdvancedFilterOptions();
+    render();
+    showToast("已将 " + changed + " 条记录设置为“" + category + "”" + (skipped ? "，跳过 " + skipped + " 条理财。" : "。"));
+  }
+
+  function getSelectedRecords() {
+    var ids = new Set(Array.from(state.batch.selectedIds));
+    return state.records.filter(function (record) {
+      return ids.has(record.id);
+    });
+  }
+
+  function getBatchCategoryOptions() {
+    var set = new Set();
+    categoryDefaults.expense.forEach(function (item) { set.add(item); });
+    categoryDefaults.income.forEach(function (item) { set.add(item); });
+    state.records.forEach(function (record) {
+      if ((record.kind === "income" || record.kind === "expense") && record.category) {
+        set.add(record.category);
+      }
+    });
+    return Array.from(set);
+  }
+
   function toggleBatchExportMenu() {
     if (!state.batch.selectedIds.size) {
       showToast("请先选择要导出的记录。");
@@ -1836,6 +1990,7 @@
     var willOpen = els.batchExportMenu.classList.contains("hidden");
     closeHeaderMenus();
     closeActionMenu();
+    closeBatchCategoryMenu();
     closeBatchExportMenu();
     if (willOpen) {
       els.batchExportMenu.classList.remove("hidden");

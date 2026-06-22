@@ -459,6 +459,30 @@ h2 {
   display: inline-flex;
 }
 
+.batch-category-menu {
+  width: 176px;
+  padding: 8px;
+}
+
+.batch-category-field {
+  display: grid;
+  gap: 4px;
+  padding: 4px 4px 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.batch-category-field input {
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--input);
+  color: var(--ink);
+  padding: 0 8px;
+}
+
 .batch-actions button {
   min-height: 28px;
   padding: 0 8px;
@@ -1059,8 +1083,21 @@ thead th {
   grid-template-columns: 10px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
+  width: 100%;
   border-bottom: 1px solid var(--line);
+  border-radius: 0;
   padding: 6px 0;
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+button.detail-item {
+  cursor: pointer;
+}
+
+button.detail-item:hover {
+  background: var(--panel-strong);
 }
 
 .detail-color {
@@ -1106,6 +1143,44 @@ thead th {
 .toast.show {
   opacity: 1;
   transform: translateY(0);
+}
+
+.import-guide-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.38);
+  backdrop-filter: blur(2px);
+}
+
+.import-guide-dialog {
+  width: min(440px, calc(100vw - 36px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+.import-guide-dialog ol {
+  margin: 10px 0 14px;
+  padding-left: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.import-guide-dialog > button {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid #2468d8;
+  border-radius: 6px;
+  background: #2468d8;
+  color: #fff;
 }
 
 .smart-classify-overlay {
