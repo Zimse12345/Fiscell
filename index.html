@@ -16,7 +16,7 @@
         </svg>
         <div>
           <h1>Fiscell</h1>
-          <p class="eyebrow">v1.1.13 · author:Zimse</p>
+          <p class="eyebrow">v1.1.17 · author:Zimse</p>
         </div>
         <a class="repo-link" href="https://github.com/Zimse12345/Fiscell" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
@@ -179,6 +179,14 @@
             <label class="field compact">
               <span>截至时间</span>
               <input id="endDateFilter" type="date">
+            </label>
+            <label class="field compact">
+              <span>金额下限</span>
+              <input id="minAmountFilter" type="number" min="0" step="0.01" placeholder="0.00">
+            </label>
+            <label class="field compact">
+              <span>金额上限</span>
+              <input id="maxAmountFilter" type="number" min="0" step="0.01" placeholder="不限">
             </label>
             <label class="field compact">
               <span>一级分类</span>
@@ -390,6 +398,18 @@
           <li>导入后可用“智能归类”整理其他分类，再用批量选择修正分类。</li>
         </ol>
         <button id="importGuideCopyPromptBtn" type="button">复制转换提示词</button>
+      </div>
+    </div>
+    <div id="importPreviewOverlay" class="import-preview-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="importPreviewTitle" aria-hidden="true">
+      <div class="import-preview-dialog">
+        <div class="panel-heading">
+          <h2 id="importPreviewTitle">导入预检查</h2>
+          <button id="importPreviewCancelBtn" class="icon-text" type="button">取消</button>
+        </div>
+        <div id="importPreviewBody" class="import-preview-body"></div>
+        <div class="import-preview-actions">
+          <button id="importPreviewConfirmBtn" type="button">确认导入</button>
+        </div>
       </div>
     </div>
     <div id="smartClassifyOverlay" class="smart-classify-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="smartClassifyTitle" aria-hidden="true">

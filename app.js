@@ -9,7 +9,7 @@
   var FALLBACK_IMPORT_PROMPT = [
     "# Fiscell 账单转换 JSON 提示词",
     "",
-    "你是 Fiscell v1.1.13 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
+    "你是 Fiscell v1.1.17 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
     "",
     "输出 JSON：{\"app\":\"local-ledger\",\"version\":4,\"records\":[{\"id\":\"\",\"occurredAt\":\"2026-06-21T12:30:00+08:00\",\"kind\":\"income | expense | investment\",\"amount\":12.34,\"category\":\"分类\",\"project\":\"仅理财记录填写\",\"target\":\"仅理财记录填写二级分类或具体标的\",\"settlement\":\"none | pending\",\"settledAmount\":0,\"settledAt\":\"\",\"investmentProfit\":0,\"closedAt\":\"\",\"note\":\"备注\",\"tags\":[]}]}",
     "",
@@ -88,6 +88,8 @@
       search: "",
       startDate: "",
       endDate: "",
+      minAmount: "",
+      maxAmount: "",
       primaryCategory: "",
       secondaryCategory: "",
       sortBy: "time",
@@ -113,7 +115,8 @@
     },
     assetVisible: true,
     assetTrendRange: "30",
-    importMode: "merge"
+    importMode: "merge",
+    pendingImport: null
   };
   mergeLexiconTerms(smartCategoryLexicons["餐饮"], {
     "土豆": 0.85, "番茄": 0.85, "西红柿": 0.85, "糕点": 1, "饼干": 1, "曲奇": 1, "蛋挞": 1, "蛋卷": 1, "泡芙": 1, "慕斯": 1, "布丁": 1, "巧克力": 1,
@@ -184,6 +187,8 @@
     els.advancedFilters = document.getElementById("advancedFilters");
     els.startDateFilter = document.getElementById("startDateFilter");
     els.endDateFilter = document.getElementById("endDateFilter");
+    els.minAmountFilter = document.getElementById("minAmountFilter");
+    els.maxAmountFilter = document.getElementById("maxAmountFilter");
     els.primaryCategoryFilter = document.getElementById("primaryCategoryFilter");
     els.secondaryCategoryFilter = document.getElementById("secondaryCategoryFilter");
     els.sortByFilter = document.getElementById("sortByFilter");
@@ -259,6 +264,10 @@
     els.importGuideOverlay = document.getElementById("importGuideOverlay");
     els.importGuideCloseBtn = document.getElementById("importGuideCloseBtn");
     els.importGuideCopyPromptBtn = document.getElementById("importGuideCopyPromptBtn");
+    els.importPreviewOverlay = document.getElementById("importPreviewOverlay");
+    els.importPreviewBody = document.getElementById("importPreviewBody");
+    els.importPreviewCancelBtn = document.getElementById("importPreviewCancelBtn");
+    els.importPreviewConfirmBtn = document.getElementById("importPreviewConfirmBtn");
     els.actionMenu = document.getElementById("actionMenu");
     els.smartClassifyOverlay = document.getElementById("smartClassifyOverlay");
     els.smartClassifyMessage = document.getElementById("smartClassifyMessage");
@@ -327,6 +336,20 @@
       state.pagination.page = 1;
       render();
     });
+    els.minAmountFilter.addEventListener("input", function () {
+      leaveBatchMode();
+      state.filters.minAmount = els.minAmountFilter.value;
+      state.filters.pendingView = "";
+      state.pagination.page = 1;
+      render();
+    });
+    els.maxAmountFilter.addEventListener("input", function () {
+      leaveBatchMode();
+      state.filters.maxAmount = els.maxAmountFilter.value;
+      state.filters.pendingView = "";
+      state.pagination.page = 1;
+      render();
+    });
     els.primaryCategoryFilter.addEventListener("input", function () {
       leaveBatchMode();
       state.filters.primaryCategory = cleanText(els.primaryCategoryFilter.value);
@@ -390,6 +413,13 @@
         closeImportGuide();
       }
     });
+    els.importPreviewCancelBtn.addEventListener("click", closeImportPreview);
+    els.importPreviewConfirmBtn.addEventListener("click", confirmImportPreview);
+    els.importPreviewOverlay.addEventListener("click", function (event) {
+      if (event.target === els.importPreviewOverlay) {
+        closeImportPreview();
+      }
+    });
     els.exportJsonBtn.addEventListener("click", function () {
       closeHeaderMenus();
       exportJson();
@@ -430,7 +460,6 @@
       exportSelectedRecords("csv");
     });
     els.pageSizeSelect.addEventListener("change", function () {
-      leaveBatchMode();
       state.pagination.pageSize = Number(els.pageSizeSelect.value) || 20;
       state.pagination.page = 1;
       render();
@@ -879,6 +908,19 @@
     els.importGuideOverlay.setAttribute("aria-hidden", "true");
   }
 
+  function openImportPreview() {
+    renderImportPreview();
+    els.importPreviewOverlay.classList.remove("hidden");
+    els.importPreviewOverlay.setAttribute("aria-hidden", "false");
+  }
+
+  function closeImportPreview() {
+    state.pendingImport = null;
+    els.importPreviewOverlay.classList.add("hidden");
+    els.importPreviewOverlay.setAttribute("aria-hidden", "true");
+    els.importPreviewBody.innerHTML = "";
+  }
+
   function beginImport(mode) {
     state.importMode = mode;
     closeHeaderMenus();
@@ -1086,7 +1128,7 @@
     els.assetVisibilityBtn.setAttribute("aria-label", state.assetVisible ? "隐藏资产数字" : "显示资产数字");
     els.assetVisibilityBtn.querySelector(".icon-eye").classList.toggle("hidden", !state.assetVisible);
     els.assetVisibilityBtn.querySelector(".icon-eye-off").classList.toggle("hidden", state.assetVisible);
-    els.totalAssetsCard.classList.toggle("active", !state.filters.pendingView && state.filters.kind === "all" && !state.filters.search && !state.filters.startDate && !state.filters.endDate && !state.filters.primaryCategory && !state.filters.secondaryCategory);
+    els.totalAssetsCard.classList.toggle("active", !state.filters.pendingView && state.filters.kind === "all" && !state.filters.search && !state.filters.startDate && !state.filters.endDate && !state.filters.minAmount && !state.filters.maxAmount && !state.filters.primaryCategory && !state.filters.secondaryCategory);
     els.pendingIncomeCard.classList.toggle("active", state.filters.pendingView === "income");
     els.pendingDebtCard.classList.toggle("active", state.filters.pendingView === "expense");
   }
@@ -1208,6 +1250,8 @@
   function getFilteredRecords() {
     var startTs = dateFilterStart(state.filters.startDate);
     var endTs = dateFilterEnd(state.filters.endDate);
+    var minAmount = parseOptionalMoney(state.filters.minAmount);
+    var maxAmount = parseOptionalMoney(state.filters.maxAmount);
     return state.records
       .filter(function (record) {
         if (state.filters.pendingView) {
@@ -1221,6 +1265,13 @@
           return false;
         }
         if (endTs && recordTs > endTs) {
+          return false;
+        }
+        var amount = Math.abs(Number(record.amount) || 0);
+        if (minAmount != null && amount < minAmount) {
+          return false;
+        }
+        if (maxAmount != null && amount > maxAmount) {
           return false;
         }
         if (state.filters.primaryCategory) {
@@ -1491,7 +1542,6 @@
       renderPagination(state.pagination.totalRecords || 0);
       return;
     }
-    leaveBatchMode();
     state.pagination.page = next;
     render();
   }
@@ -1590,7 +1640,7 @@
     var padLeft = 54;
     var padRight = 16;
     var padTop = 18;
-    var padBottom = 34;
+    var padBottom = 42;
     var plotW = Math.max(1, width - padLeft - padRight);
     var plotH = Math.max(1, height - padTop - padBottom);
     var minTs = points[0].ts;
@@ -1630,8 +1680,8 @@
     ctx.font = "11px Microsoft YaHei, sans-serif";
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
-    for (var i = 0; i <= 3; i += 1) {
-      var ratio = i / 3;
+    for (var i = 0; i <= 4; i += 1) {
+      var ratio = i / 4;
       var y = padTop + ratio * plotH;
       var value = maxValue - ratio * (maxValue - minValue);
       ctx.beginPath();
@@ -1641,23 +1691,39 @@
       ctx.fillText(state.assetVisible ? shortMoney(Math.max(0, value)) : "****", padLeft - 8, y);
     }
 
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    var firstDate = new Date(minTs);
-    var lastDate = new Date(maxTs);
-    ctx.fillText(formatShortDate(firstDate), padLeft, height - padBottom + 12);
-    ctx.fillText(formatShortDate(lastDate), width - padRight - 4, height - padBottom + 12);
+    drawTrendTimeTicks(ctx, minTs, maxTs, xOf, padTop, height - padBottom, height);
+
+    var linePoints = points.map(function (point) {
+      return { x: xOf(point.ts), y: yOf(point.value) };
+    });
+    var areaGradient = ctx.createLinearGradient(0, padTop, 0, height - padBottom);
+    areaGradient.addColorStop(0, "rgba(36, 104, 216, 0.24)");
+    areaGradient.addColorStop(0.58, "rgba(36, 104, 216, 0.08)");
+    areaGradient.addColorStop(1, "rgba(36, 104, 216, 0)");
+    ctx.beginPath();
+    linePoints.forEach(function (point, index) {
+      if (index === 0) {
+        ctx.moveTo(point.x, point.y);
+      } else {
+        ctx.lineTo(point.x, point.y);
+      }
+    });
+    ctx.lineTo(linePoints[linePoints.length - 1].x, height - padBottom);
+    ctx.lineTo(linePoints[0].x, height - padBottom);
+    ctx.closePath();
+    ctx.fillStyle = areaGradient;
+    ctx.fill();
 
     ctx.strokeStyle = "#2468d8";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.4;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
     ctx.beginPath();
-    points.forEach(function (point, index) {
-      var x = xOf(point.ts);
-      var y = yOf(point.value);
+    linePoints.forEach(function (point, index) {
       if (index === 0) {
-        ctx.moveTo(x, y);
+        ctx.moveTo(point.x, point.y);
       } else {
-        ctx.lineTo(x, y);
+        ctx.lineTo(point.x, point.y);
       }
     });
     ctx.stroke();
@@ -1786,6 +1852,110 @@
       sampled.push(points[Math.round(i * lastIndex / (maxCount - 1))]);
     }
     return sampled;
+  }
+
+  function drawTrendTimeTicks(ctx, minTs, maxTs, xOf, axisTop, axisY, height) {
+    var ticks = getTrendTimeTicks(minTs, maxTs);
+    if (!ticks.length) {
+      return;
+    }
+    ctx.save();
+    ctx.strokeStyle = cssVar("--line");
+    ctx.fillStyle = cssVar("--muted");
+    ctx.font = "10px Microsoft YaHei, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ticks.forEach(function (tick) {
+      var x = xOf(tick.ts);
+      ctx.beginPath();
+      ctx.moveTo(x, axisY);
+      ctx.lineTo(x, axisY + 4);
+      ctx.stroke();
+      ctx.fillText(tick.label, x, Math.min(height - 20, axisY + 8));
+    });
+    ctx.restore();
+  }
+
+  function getTrendTimeTicks(minTs, maxTs) {
+    var minDate = startOfDay(new Date(minTs));
+    var maxDate = startOfDay(new Date(maxTs));
+    var spanDays = Math.max(1, Math.ceil((maxDate.getTime() - minDate.getTime()) / 86400000));
+    var spanYears = spanDays / 365.25;
+    if (spanYears > 100) {
+      return [];
+    }
+    if (spanYears > 50) {
+      return buildYearTicks(minDate, maxDate, Math.max(1, Math.ceil(spanYears / 8)));
+    }
+    if (spanYears > 10) {
+      return buildQuarterTicks(minDate, maxDate, Math.max(1, Math.ceil((spanYears * 4) / 9)));
+    }
+    if (spanDays > 120) {
+      return buildMonthTicks(minDate, maxDate, Math.max(1, Math.ceil((spanDays / 30.44) / 9)));
+    }
+    return buildDayTicks(minDate, maxDate, Math.max(1, Math.ceil(spanDays / 8)));
+  }
+
+  function buildDayTicks(minDate, maxDate, intervalDays) {
+    var ticks = [];
+    var cursor = startOfDay(minDate);
+    for (var guard = 0; cursor <= maxDate && guard < 400; guard += 1) {
+      ticks.push({ ts: cursor.getTime(), label: formatShortDate(cursor) });
+      cursor.setDate(cursor.getDate() + intervalDays);
+    }
+    addFinalTick(ticks, maxDate, formatShortDate(maxDate));
+    return ticks;
+  }
+
+  function buildMonthTicks(minDate, maxDate, intervalMonths) {
+    var ticks = [];
+    var cursor = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    if (cursor < minDate) {
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+    for (var guard = 0; cursor <= maxDate && guard < 180; guard += 1) {
+      ticks.push({ ts: cursor.getTime(), label: formatYearMonth(cursor) });
+      cursor.setMonth(cursor.getMonth() + intervalMonths);
+    }
+    return ticks;
+  }
+
+  function buildQuarterTicks(minDate, maxDate, intervalQuarters) {
+    var ticks = [];
+    var quarterMonth = Math.floor(minDate.getMonth() / 3) * 3;
+    var cursor = new Date(minDate.getFullYear(), quarterMonth, 1);
+    if (cursor < minDate) {
+      cursor.setMonth(cursor.getMonth() + 3);
+    }
+    for (var guard = 0; cursor <= maxDate && guard < 240; guard += 1) {
+      ticks.push({ ts: cursor.getTime(), label: cursor.getFullYear() + "Q" + (Math.floor(cursor.getMonth() / 3) + 1) });
+      cursor.setMonth(cursor.getMonth() + intervalQuarters * 3);
+    }
+    return ticks;
+  }
+
+  function buildYearTicks(minDate, maxDate, intervalYears) {
+    var ticks = [];
+    var cursor = new Date(minDate.getFullYear(), 0, 1);
+    if (cursor < minDate) {
+      cursor.setFullYear(cursor.getFullYear() + 1);
+    }
+    for (var guard = 0; cursor <= maxDate && guard < 160; guard += 1) {
+      ticks.push({ ts: cursor.getTime(), label: String(cursor.getFullYear()) });
+      cursor.setFullYear(cursor.getFullYear() + intervalYears);
+    }
+    return ticks;
+  }
+
+  function addFinalTick(ticks, date, label) {
+    var ts = date.getTime();
+    if (!ticks.length || Math.abs(ticks[ticks.length - 1].ts - ts) > 86400000) {
+      ticks.push({ ts: ts, label: label });
+    }
+  }
+
+  function startOfDay(date) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate());
   }
 
   function handleAssetTrendHover(event) {
@@ -2061,6 +2231,8 @@
     state.filters.search = "";
     state.filters.startDate = "";
     state.filters.endDate = "";
+    state.filters.minAmount = "";
+    state.filters.maxAmount = "";
     state.filters.primaryCategory = "";
     state.filters.secondaryCategory = "";
     state.filters.sortBy = "time";
@@ -2070,6 +2242,8 @@
     els.searchInput.value = "";
     els.startDateFilter.value = "";
     els.endDateFilter.value = "";
+    els.minAmountFilter.value = "";
+    els.maxAmountFilter.value = "";
     els.primaryCategoryFilter.value = "";
     els.secondaryCategoryFilter.value = "";
     els.sortByFilter.value = "time";
@@ -2085,6 +2259,8 @@
       state.filters.search = "";
       state.filters.startDate = "";
       state.filters.endDate = "";
+      state.filters.minAmount = "";
+      state.filters.maxAmount = "";
       state.filters.primaryCategory = "";
       state.filters.secondaryCategory = "";
       state.filters.sortBy = "time";
@@ -2092,6 +2268,8 @@
       els.searchInput.value = "";
       els.startDateFilter.value = "";
       els.endDateFilter.value = "";
+      els.minAmountFilter.value = "";
+      els.maxAmountFilter.value = "";
       els.primaryCategoryFilter.value = "";
       els.secondaryCategoryFilter.value = "";
       els.sortByFilter.value = "time";
@@ -2143,6 +2321,8 @@
     return Boolean(
       state.filters.kind !== "all" ||
       state.filters.search ||
+      state.filters.minAmount ||
+      state.filters.maxAmount ||
       state.filters.primaryCategory ||
       state.filters.secondaryCategory ||
       state.filters.sortBy !== "time" ||
@@ -2273,14 +2453,14 @@
   }
 
   function selectAllVisibleRecords() {
-    getPagedRecords(getFilteredRecords()).forEach(function (record) {
+    getFilteredRecords().forEach(function (record) {
       state.batch.selectedIds.add(record.id);
     });
     render();
   }
 
   function clearBatchSelection() {
-    state.batch.selectedIds.clear();
+    clearFilteredBatchSelection();
     render();
   }
 
@@ -2296,7 +2476,7 @@
     state.records = state.records.filter(function (record) {
       return !idSet.has(record.id);
     });
-    leaveBatchMode();
+    clearBatchSelectionAfterAction();
     saveRecords();
     render();
     showToast("已删除 " + ids.length + " 条记录。");
@@ -2355,10 +2535,12 @@
     });
     closeBatchCategoryMenu();
     if (!changed) {
+      clearBatchSelectionAfterAction();
+      render();
       showToast(skipped ? "没有需要修改的收入或支出分类，已跳过理财记录。" : "没有需要修改的分类。");
       return;
     }
-    leaveBatchMode();
+    clearBatchSelectionAfterAction();
     saveRecords();
     fillDatalists();
     refreshAdvancedFilterOptions();
@@ -2428,11 +2610,26 @@
     saveFile(filename, content, type)
       .then(function (saved) {
         if (saved) {
-          leaveBatchMode();
+          clearBatchSelectionAfterAction();
           render();
           showToast("已导出 " + records.length + " 条记录。");
         }
       });
+  }
+
+  function clearFilteredBatchSelection() {
+    var filteredIds = new Set(getFilteredRecords().map(function (record) { return record.id; }));
+    Array.from(state.batch.selectedIds).forEach(function (id) {
+      if (filteredIds.has(id)) {
+        state.batch.selectedIds.delete(id);
+      }
+    });
+  }
+
+  function clearBatchSelectionAfterAction() {
+    state.batch.selectedIds.clear();
+    closeBatchExportMenu();
+    closeBatchCategoryMenu();
   }
 
   function pruneBatchSelection() {
@@ -2608,7 +2805,6 @@
   }
 
   function importFile(event) {
-    leaveBatchMode();
     var file = event.target.files[0];
     if (!file) {
       return;
@@ -2626,24 +2822,13 @@
           throw new Error("No usable records");
         }
 
-        localStorage.setItem(BACKUP_KEY, JSON.stringify({
-          backedUpAt: new Date().toISOString(),
-          records: state.records
-        }));
-        if (state.importMode === "replace") {
-          state.records = normalized;
-          saveRecords();
-          state.pagination.page = 1;
-          render();
-          showToast("覆盖导入完成：共 " + normalized.length + " 条。");
-          return;
-        }
-        var result = mergeRecords(state.records, normalized);
-        state.records = result.records;
-        saveRecords();
-        state.pagination.page = 1;
-        render();
-        showToast("导入完成：新增 " + result.added + " 条，更新 " + result.updated + " 条，跳过 " + result.skipped + " 条。");
+        state.pendingImport = {
+          fileName: file.name,
+          mode: state.importMode,
+          records: normalized,
+          summary: buildImportPreviewSummary(normalized)
+        };
+        openImportPreview();
       } catch (error) {
         showToast("导入失败，请确认文件是 JSON 或 CSV 账单。");
       } finally {
@@ -2651,6 +2836,110 @@
       }
     };
     reader.readAsText(file, "utf-8");
+  }
+
+  function buildImportPreviewSummary(records) {
+    var counts = {
+      income: 0,
+      expense: 0,
+      investment: 0
+    };
+    var localIds = new Set(state.records.map(function (record) { return record.id; }));
+    var importIds = new Set();
+    var localDuplicateIds = new Set();
+    var fileDuplicateIds = new Set();
+    var minTs = Infinity;
+    var maxTs = -Infinity;
+
+    records.forEach(function (record) {
+      if (counts[record.kind] != null) {
+        counts[record.kind] += 1;
+      }
+      if (record.id) {
+        if (importIds.has(record.id)) {
+          fileDuplicateIds.add(record.id);
+        }
+        importIds.add(record.id);
+        if (localIds.has(record.id)) {
+          localDuplicateIds.add(record.id);
+        }
+      }
+      var ts = new Date(record.occurredAt).getTime();
+      if (!Number.isNaN(ts)) {
+        minTs = Math.min(minTs, ts);
+        maxTs = Math.max(maxTs, ts);
+      }
+    });
+
+    return {
+      total: records.length,
+      counts: counts,
+      dateRange: minTs === Infinity ? "无有效时间" : formatTrendDate(minTs) + " - " + formatTrendDate(maxTs),
+      localDuplicateCount: localDuplicateIds.size,
+      fileDuplicateCount: fileDuplicateIds.size
+    };
+  }
+
+  function renderImportPreview() {
+    var pending = state.pendingImport;
+    if (!pending) {
+      return;
+    }
+    var summary = pending.summary;
+    var modeLabel = pending.mode === "replace" ? "覆盖当前账本" : "合并到当前账本";
+    var duplicateClass = summary.localDuplicateCount || summary.fileDuplicateCount ? " has-warning" : "";
+    els.importPreviewConfirmBtn.textContent = pending.mode === "replace" ? "确认覆盖" : "确认合并";
+    els.importPreviewBody.innerHTML =
+      "<div class=\"import-preview-meta\">" +
+        "<span>文件</span><strong>" + escapeHtml(pending.fileName) + "</strong>" +
+        "<span>方式</span><strong>" + escapeHtml(modeLabel) + "</strong>" +
+      "</div>" +
+      "<div class=\"import-preview-grid\">" +
+        previewMetric("可导入条目", summary.total + " 条") +
+        previewMetric("收入", summary.counts.income + " 条") +
+        previewMetric("支出", summary.counts.expense + " 条") +
+        previewMetric("理财", summary.counts.investment + " 条") +
+      "</div>" +
+      "<div class=\"import-preview-line\"><span>时间范围</span><strong>" + escapeHtml(summary.dateRange) + "</strong></div>" +
+      "<div class=\"import-preview-line" + duplicateClass + "\"><span>重复 ID</span><strong>与当前账本重复 " + summary.localDuplicateCount + " 个；文件内重复 " + summary.fileDuplicateCount + " 个</strong></div>" +
+      "<p class=\"import-preview-note\">" +
+        (pending.mode === "replace"
+          ? "确认后会先备份当前账本，再用本次文件替换全部数据。"
+          : "确认后会先备份当前账本，再按 ID 合并；重复记录会保留更新时间较新的版本。") +
+      "</p>";
+  }
+
+  function previewMetric(label, value) {
+    return "<div class=\"import-preview-metric\"><span>" + escapeHtml(label) + "</span><strong>" + escapeHtml(value) + "</strong></div>";
+  }
+
+  function confirmImportPreview() {
+    var pending = state.pendingImport;
+    if (!pending || !pending.records.length) {
+      closeImportPreview();
+      return;
+    }
+    leaveBatchMode();
+    localStorage.setItem(BACKUP_KEY, JSON.stringify({
+      backedUpAt: new Date().toISOString(),
+      records: state.records
+    }));
+    if (pending.mode === "replace") {
+      state.records = pending.records;
+      saveRecords();
+      state.pagination.page = 1;
+      closeImportPreview();
+      render();
+      showToast("覆盖导入完成：共 " + pending.records.length + " 条。");
+      return;
+    }
+    var result = mergeRecords(state.records, pending.records);
+    state.records = result.records;
+    saveRecords();
+    state.pagination.page = 1;
+    closeImportPreview();
+    render();
+    showToast("导入完成：新增 " + result.added + " 条，更新 " + result.updated + " 条，跳过 " + result.skipped + " 条。");
   }
 
   function recordsFromJson(text) {
@@ -3137,6 +3426,14 @@
     return negative ? -number : number;
   }
 
+  function parseOptionalMoney(value) {
+    var text = cleanText(value);
+    if (!text) {
+      return null;
+    }
+    return roundMoney(parseMoney(text));
+  }
+
   function parseDateValue(value) {
     if (value == null || value === "") {
       return "";
@@ -3209,6 +3506,13 @@
     return new Intl.DateTimeFormat("zh-CN", {
       month: "2-digit",
       day: "2-digit"
+    }).format(value);
+  }
+
+  function formatYearMonth(value) {
+    return new Intl.DateTimeFormat("zh-CN", {
+      year: "2-digit",
+      month: "2-digit"
     }).format(value);
   }
 

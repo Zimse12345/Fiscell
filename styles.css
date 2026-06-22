@@ -742,10 +742,10 @@ textarea {
 
 .advanced-filters {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 7px;
+  grid-template-columns: 1.12fr 1.12fr repeat(5, minmax(0, 1fr));
+  gap: 5px;
   margin-bottom: 8px;
-  padding: 8px 10px;
+  padding: 7px 8px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
@@ -754,7 +754,7 @@ textarea {
 
 .compact input,
 .compact select {
-  min-height: 32px;
+  min-height: 30px;
 }
 
 .pending-banner {
@@ -1282,6 +1282,107 @@ button.detail-item:hover {
   border-radius: 6px;
   background: #2468d8;
   color: #fff;
+}
+
+.import-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.38);
+  backdrop-filter: blur(2px);
+}
+
+.import-preview-dialog {
+  width: min(460px, calc(100vw - 36px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
+
+.import-preview-body {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.import-preview-meta,
+.import-preview-line {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 7px 9px;
+  background: var(--panel-soft);
+}
+
+.import-preview-meta {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.import-preview-meta span,
+.import-preview-line span,
+.import-preview-metric span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.import-preview-meta strong,
+.import-preview-line strong,
+.import-preview-metric strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.import-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.import-preview-metric {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--panel-soft);
+}
+
+.import-preview-line.has-warning {
+  border-color: rgba(217, 119, 6, 0.45);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.import-preview-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.import-preview-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+.import-preview-actions button {
+  min-height: 34px;
+  border: 1px solid #2468d8;
+  border-radius: 6px;
+  background: #2468d8;
+  color: #fff;
+  padding: 0 14px;
 }
 
 .smart-classify-overlay {
