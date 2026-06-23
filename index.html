@@ -16,7 +16,7 @@
         </svg>
         <div>
           <h1>Fiscell</h1>
-          <p class="eyebrow">v1.1.17 · author:Zimse</p>
+          <p class="eyebrow">v1.1.21 · author:Zimse</p>
         </div>
         <a class="repo-link" href="https://github.com/Zimse12345/Fiscell" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
@@ -206,14 +206,6 @@
               </div>
               <datalist id="secondaryCategoryOptions"></datalist>
             </label>
-            <label class="field compact">
-              <span>排序方式</span>
-              <select id="sortByFilter">
-                <option value="time">时间</option>
-                <option value="amount">金额</option>
-                <option value="note">备注（字典序）</option>
-              </select>
-            </label>
           </div>
 
           <div id="pendingBanner" class="pending-banner hidden">
@@ -261,10 +253,10 @@
                     <th class="select-col hidden">选择</th>
                     <th>类型</th>
                     <th><div class="category-head"><span>分类 / 项目</span><button id="smartClassifyBtn" type="button">智能归类</button></div></th>
-                    <th>金额</th>
+                    <th><div class="sortable-head"><span>金额</span><button id="amountSortBtn" class="sort-toggle" type="button" title="金额排序" aria-label="金额排序">↕</button></div></th>
                     <th>状态</th>
                     <th>备注</th>
-                    <th class="time-col">时间</th>
+                    <th class="time-col"><div class="sortable-head"><span>时间</span><button id="timeSortBtn" class="sort-toggle" type="button" title="时间排序" aria-label="时间排序">↕</button></div></th>
                     <th>操作</th>
                   </tr>
                 </thead>

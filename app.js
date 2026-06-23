@@ -9,7 +9,7 @@
   var FALLBACK_IMPORT_PROMPT = [
     "# Fiscell 账单转换 JSON 提示词",
     "",
-    "你是 Fiscell v1.1.17 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
+    "你是 Fiscell v1.1.21 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
     "",
     "输出 JSON：{\"app\":\"local-ledger\",\"version\":4,\"records\":[{\"id\":\"\",\"occurredAt\":\"2026-06-21T12:30:00+08:00\",\"kind\":\"income | expense | investment\",\"amount\":12.34,\"category\":\"分类\",\"project\":\"仅理财记录填写\",\"target\":\"仅理财记录填写二级分类或具体标的\",\"settlement\":\"none | pending\",\"settledAmount\":0,\"settledAt\":\"\",\"investmentProfit\":0,\"closedAt\":\"\",\"note\":\"备注\",\"tags\":[]}]}",
     "",
@@ -92,7 +92,8 @@
       maxAmount: "",
       primaryCategory: "",
       secondaryCategory: "",
-      sortBy: "time",
+      sortBy: "default",
+      sortDir: "desc",
       pendingView: ""
     },
     lastPreset: {
@@ -191,7 +192,6 @@
     els.maxAmountFilter = document.getElementById("maxAmountFilter");
     els.primaryCategoryFilter = document.getElementById("primaryCategoryFilter");
     els.secondaryCategoryFilter = document.getElementById("secondaryCategoryFilter");
-    els.sortByFilter = document.getElementById("sortByFilter");
     els.clearAllBtn = document.getElementById("clearAllBtn");
     els.importBtn = document.getElementById("importBtn");
     els.importMenu = document.getElementById("importMenu");
@@ -220,6 +220,8 @@
     els.clearPendingViewBtn = document.getElementById("clearPendingViewBtn");
     els.visibleCount = document.getElementById("visibleCount");
     els.smartClassifyBtn = document.getElementById("smartClassifyBtn");
+    els.amountSortBtn = document.getElementById("amountSortBtn");
+    els.timeSortBtn = document.getElementById("timeSortBtn");
     els.batchTools = document.getElementById("batchTools");
     els.batchToggleBtn = document.getElementById("batchToggleBtn");
     els.selectAllBtn = document.getElementById("selectAllBtn");
@@ -369,12 +371,11 @@
       renderOpenComboMenu("secondaryCategoryFilter");
       render();
     });
-    els.sortByFilter.addEventListener("change", function () {
-      leaveBatchMode();
-      state.filters.sortBy = els.sortByFilter.value || "time";
-      state.filters.pendingView = "";
-      state.pagination.page = 1;
-      render();
+    els.amountSortBtn.addEventListener("click", function () {
+      cycleTableSort("amount");
+    });
+    els.timeSortBtn.addEventListener("click", function () {
+      cycleTableSort("time");
     });
     els.totalAssetsCard.addEventListener("click", resetViewFilters);
     els.pendingIncomeCard.addEventListener("click", function () {
@@ -1076,6 +1077,7 @@
     renderBatchControls(pageRecords, filteredRecords.length);
     renderPagination(filteredRecords.length);
     renderDateFilterControls();
+    renderSortButtons();
     renderCharts();
     refreshChartDrawer();
     fillDatalists();
@@ -1167,9 +1169,9 @@
         "<td><span class=\"badge " + record.kind + "\">" + kindLabel(record.kind) + "</span></td>" +
         "<td>" + renderCategoryCell(record) + "</td>" +
         "<td class=\"amount " + record.kind + "\">" + renderAmount(record) + "</td>" +
-        "<td>" + renderStatus(record) + "</td>" +
+        "<td class=\"status-col\">" + renderStatus(record) + "</td>" +
         "<td>" + escapeHtml(record.note || "") + "</td>" +
-        "<td class=\"time-col\">" + escapeHtml(formatDateTime(record.occurredAt)) + "</td>" +
+        "<td class=\"time-col\">" + renderTimeCell(record.occurredAt) + "</td>" +
         "<td><div class=\"row-actions\">" +
         "<button class=\"icon-action delete-action\" type=\"button\" data-action=\"delete\" data-id=\"" + escapeHtml(record.id) + "\" title=\"删除\" aria-label=\"删除\">×</button>" +
         "<button class=\"icon-action\" type=\"button\" data-action=\"more\" data-id=\"" + escapeHtml(record.id) + "\" title=\"更多\" aria-label=\"更多\">⋮</button>" +
@@ -1244,7 +1246,18 @@
     if (!tags || !tags.length) {
       return "";
     }
-    return "<div class=\"hint\">" + tags.map(escapeHtml).join(" / ") + "</div>";
+    var text = tags.map(cleanText).filter(Boolean).join(" / ");
+    return text ? "<div class=\"hint tag-line\" title=\"" + escapeHtml(text) + "\">" + escapeHtml(text) + "</div>" : "";
+  }
+
+  function renderTimeCell(iso) {
+    var date = new Date(iso);
+    if (Number.isNaN(date.getTime())) {
+      return "<div class=\"time-split\"><span class=\"time-date\"></span><span class=\"time-clock\"></span></div>";
+    }
+    var dateText = date.getFullYear() + "/" + pad2(date.getMonth() + 1) + "/" + pad2(date.getDate());
+    var timeText = pad2(date.getHours()) + ":" + pad2(date.getMinutes());
+    return "<div class=\"time-split\"><span class=\"time-date\">" + dateText + "</span><span class=\"time-clock\">" + timeText + "</span></div>";
   }
 
   function getFilteredRecords() {
@@ -1294,22 +1307,61 @@
   }
 
   function compareRecordsForView(a, b) {
-    var sortBy = state.filters.sortBy || "time";
+    var sortBy = state.filters.sortBy || "default";
+    var sortDir = state.filters.sortDir === "asc" ? "asc" : "desc";
     if (sortBy === "amount") {
-      return compareNumberDesc(a.amount, b.amount) || compareTimeDesc(a, b);
+      return compareNumber(a.amount, b.amount, sortDir) || compareTimeDesc(a, b);
     }
-    if (sortBy === "note") {
-      return cleanText(a.note).localeCompare(cleanText(b.note), "zh-CN", { numeric: true }) || compareTimeDesc(a, b);
+    if (sortBy === "time") {
+      return sortDir === "asc" ? compareTimeAsc(a, b) : compareTimeDesc(a, b);
     }
     return compareTimeDesc(a, b);
+  }
+
+  function compareTimeAsc(a, b) {
+    return getRecordTime(a) - getRecordTime(b);
   }
 
   function compareTimeDesc(a, b) {
     return getRecordTime(b) - getRecordTime(a);
   }
 
-  function compareNumberDesc(a, b) {
-    return (Number(b) || 0) - (Number(a) || 0);
+  function compareNumber(a, b, direction) {
+    var result = (Number(a) || 0) - (Number(b) || 0);
+    return direction === "asc" ? result : -result;
+  }
+
+  function cycleTableSort(field) {
+    leaveBatchMode();
+    if (state.filters.sortBy !== field) {
+      state.filters.sortBy = field;
+      state.filters.sortDir = field === "amount" ? "desc" : "asc";
+    } else if (field === "amount" && state.filters.sortDir === "desc") {
+      state.filters.sortDir = "asc";
+    } else if (field === "time" && state.filters.sortDir === "asc") {
+      state.filters.sortDir = "desc";
+    } else {
+      state.filters.sortBy = "default";
+      state.filters.sortDir = "desc";
+    }
+    state.pagination.page = 1;
+    render();
+  }
+
+  function renderSortButtons() {
+    updateSortButton(els.amountSortBtn, "amount", "金额");
+    updateSortButton(els.timeSortBtn, "time", "时间");
+  }
+
+  function updateSortButton(button, field, label) {
+    var active = state.filters.sortBy === field;
+    var direction = active ? state.filters.sortDir : "";
+    var symbol = active ? (direction === "asc" ? "↑" : "↓") : "↕";
+    var text = active ? (direction === "asc" ? "升序" : "降序") : "默认";
+    button.textContent = symbol;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-label", label + "排序：" + text);
+    button.setAttribute("title", label + "排序：" + text);
   }
 
   function getRecordTime(record) {
@@ -2235,7 +2287,6 @@
     state.filters.maxAmount = "";
     state.filters.primaryCategory = "";
     state.filters.secondaryCategory = "";
-    state.filters.sortBy = "time";
     state.filters.pendingView = "";
     state.pagination.page = 1;
     els.kindFilter.value = "all";
@@ -2246,7 +2297,6 @@
     els.maxAmountFilter.value = "";
     els.primaryCategoryFilter.value = "";
     els.secondaryCategoryFilter.value = "";
-    els.sortByFilter.value = "time";
     refreshAdvancedFilterOptions();
   }
 
@@ -2263,7 +2313,6 @@
       state.filters.maxAmount = "";
       state.filters.primaryCategory = "";
       state.filters.secondaryCategory = "";
-      state.filters.sortBy = "time";
       state.pagination.page = 1;
       els.searchInput.value = "";
       els.startDateFilter.value = "";
@@ -2272,7 +2321,6 @@
       els.maxAmountFilter.value = "";
       els.primaryCategoryFilter.value = "";
       els.secondaryCategoryFilter.value = "";
-      els.sortByFilter.value = "time";
       refreshAdvancedFilterOptions();
     }
     render();
@@ -2325,7 +2373,6 @@
       state.filters.maxAmount ||
       state.filters.primaryCategory ||
       state.filters.secondaryCategory ||
-      state.filters.sortBy !== "time" ||
       state.filters.pendingView
     );
   }
