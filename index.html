@@ -1,9 +1,10 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Fiscell</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg">
     <link rel="stylesheet" href="./styles.css">
   </head>
   <body>
@@ -16,13 +17,19 @@
         </svg>
         <div>
           <h1>Fiscell</h1>
-          <p class="eyebrow">v1.1.21 · author:Zimse</p>
+          <p class="eyebrow">v1.1.25 · author:Zimse</p>
         </div>
         <a class="repo-link" href="https://github.com/Zimse12345/Fiscell" target="_blank" rel="noopener noreferrer">GitHub</a>
       </div>
       <div class="header-actions">
         <button id="themeToggle" class="theme-toggle" type="button" title="切换主题" aria-label="切换主题">
-          <span id="themeIcon">☀</span>
+          <svg id="themeIconSun" class="theme-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path>
+          </svg>
+          <svg id="themeIconMoon" class="theme-icon hidden" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20.5 14.6A8.6 8.6 0 0 1 9.4 3.5a7.7 7.7 0 1 0 11.1 11.1z"></path>
+          </svg>
         </button>
         <button id="clearAllBtn" class="danger" type="button">清空数据</button>
         <div class="header-menu-wrap">
@@ -363,7 +370,13 @@
               <h2>资产变化</h2>
               <span id="assetTrendHint" class="hint"></span>
             </div>
-            <select id="assetTrendRange" aria-label="资产变化范围">
+            <select id="assetTrendMode" class="trend-mode-select" aria-label="资产变化类型">
+              <option value="asset">总资产</option>
+              <option value="daily">日均</option>
+              <option value="income">收入结构</option>
+              <option value="expense">支出结构</option>
+            </select>
+            <select id="assetTrendRange" class="trend-range-select" aria-label="资产变化范围">
               <option value="30">近30天</option>
               <option value="90">近90天</option>
               <option value="365">近一年</option>

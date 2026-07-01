@@ -239,7 +239,24 @@ h2 {
   border: 1px solid var(--line);
   background: var(--panel);
   color: var(--ink);
-  font-size: 18px;
+}
+
+.theme-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#themeIconSun {
+  color: #d97706;
+}
+
+#themeIconMoon {
+  color: #5b6ee1;
 }
 
 .primary,
@@ -434,13 +451,20 @@ h2 {
 }
 
 .trend-panel select {
-  width: 82px;
   min-height: 30px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: var(--input);
   color: var(--ink);
   padding: 0 8px;
+}
+
+.trend-mode-select {
+  width: 96px;
+}
+
+.trend-range-select {
+  width: 82px;
 }
 
 .clear-date-filter {
@@ -479,6 +503,37 @@ h2 {
 .asset-trend-tooltip span {
   color: var(--muted);
   margin-top: 2px;
+}
+
+.trend-tooltip-list {
+  display: grid;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.trend-tooltip-list div {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.trend-tooltip-list i {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+}
+
+.trend-tooltip-list span,
+.trend-tooltip-list b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.trend-tooltip-list b {
+  color: var(--ink);
 }
 
 .entry-panel,

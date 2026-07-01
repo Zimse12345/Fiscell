@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   "use strict";
 
   var STORAGE_KEY = "local-ledger.records.v4";
@@ -9,7 +9,7 @@
   var FALLBACK_IMPORT_PROMPT = [
     "# Fiscell 账单转换 JSON 提示词",
     "",
-    "你是 Fiscell v1.1.21 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
+    "你是 Fiscell v1.1.25 的账单数据转换助手。请把我提供的表格、CSV、文本、截图 OCR 文本或其他账单内容，转换成 Fiscell 可导入的 JSON。只输出 JSON，不要输出解释、Markdown 代码块或额外文字。",
     "",
     "输出 JSON：{\"app\":\"local-ledger\",\"version\":4,\"records\":[{\"id\":\"\",\"occurredAt\":\"2026-06-21T12:30:00+08:00\",\"kind\":\"income | expense | investment\",\"amount\":12.34,\"category\":\"分类\",\"project\":\"仅理财记录填写\",\"target\":\"仅理财记录填写二级分类或具体标的\",\"settlement\":\"none | pending\",\"settledAmount\":0,\"settledAt\":\"\",\"investmentProfit\":0,\"closedAt\":\"\",\"note\":\"备注\",\"tags\":[]}]}",
     "",
@@ -115,6 +115,7 @@
       totalRecords: 0
     },
     assetVisible: true,
+    assetTrendMode: "asset",
     assetTrendRange: "30",
     importMode: "merge",
     pendingImport: null
@@ -205,7 +206,8 @@
     els.setAssetBtn = document.getElementById("setAssetBtn");
     els.assetVisibilityBtn = document.getElementById("assetVisibilityBtn");
     els.themeToggle = document.getElementById("themeToggle");
-    els.themeIcon = document.getElementById("themeIcon");
+    els.themeIconSun = document.getElementById("themeIconSun");
+    els.themeIconMoon = document.getElementById("themeIconMoon");
     els.importFile = document.getElementById("importFile");
     els.totalAssetsCard = document.getElementById("totalAssetsCard");
     els.totalAssets = document.getElementById("totalAssets");
@@ -248,6 +250,7 @@
     els.incomeChart = document.getElementById("incomeChart");
     els.expenseChart = document.getElementById("expenseChart");
     els.assetTrendChart = document.getElementById("assetTrendChart");
+    els.assetTrendMode = document.getElementById("assetTrendMode");
     els.assetTrendRange = document.getElementById("assetTrendRange");
     els.assetTrendHint = document.getElementById("assetTrendHint");
     els.assetTrendTooltip = document.getElementById("assetTrendTooltip");
@@ -488,6 +491,10 @@
     });
     els.assetTrendRange.addEventListener("change", function () {
       state.assetTrendRange = els.assetTrendRange.value || "30";
+      drawAssetTrendChart();
+    });
+    els.assetTrendMode.addEventListener("change", function () {
+      state.assetTrendMode = els.assetTrendMode.value || "asset";
       drawAssetTrendChart();
     });
     els.assetTrendChart.addEventListener("mousemove", handleAssetTrendHover);
@@ -1678,16 +1685,16 @@
     var height = els.assetTrendChart.clientHeight;
     ctx.clearRect(0, 0, width, height);
 
-    var points = getAssetTrendPoints(state.assetTrendRange);
-    points = sampleTrendPoints(points, 256);
-    if (!points.length) {
+    var data = getAssetTrendChartData(state.assetTrendMode, state.assetTrendRange);
+    var points = sampleTrendPoints(data.points, 256);
+    data.points = points;
+    if (!points.length || !data.series.length) {
       els.assetTrendHint.textContent = "";
       assetTrendRenderState = null;
-      drawEmptyChart(ctx, width, height, "暂无资产变化数据");
+      drawEmptyChart(ctx, width, height, data.emptyText);
       return;
     }
-    var current = points[points.length - 1].value;
-    els.assetTrendHint.textContent = "当前 " + privateMoney(current);
+    els.assetTrendHint.textContent = data.hint;
 
     var padLeft = 54;
     var padRight = 16;
@@ -1700,9 +1707,12 @@
     if (maxTs <= minTs) {
       maxTs = minTs + 86400000;
     }
-    var values = points.map(function (point) { return point.value; });
+    var values = getTrendYValues(data);
     var minValue = Math.min.apply(null, values);
     var maxValue = Math.max.apply(null, values);
+    if (data.startsAtZero) {
+      minValue = 0;
+    }
     if (maxValue === minValue) {
       maxValue += 1;
       minValue -= 1;
@@ -1745,44 +1755,16 @@
 
     drawTrendTimeTicks(ctx, minTs, maxTs, xOf, padTop, height - padBottom, height);
 
-    var linePoints = points.map(function (point) {
-      return { x: xOf(point.ts), y: yOf(point.value) };
+    if (data.series.length === 1) {
+      drawSingleTrendArea(ctx, points, xOf, yOf, height - padBottom);
+    }
+    data.series.forEach(function (series, index) {
+      drawTrendLine(ctx, points, series, xOf, yOf, index);
     });
-    var areaGradient = ctx.createLinearGradient(0, padTop, 0, height - padBottom);
-    areaGradient.addColorStop(0, "rgba(36, 104, 216, 0.24)");
-    areaGradient.addColorStop(0.58, "rgba(36, 104, 216, 0.08)");
-    areaGradient.addColorStop(1, "rgba(36, 104, 216, 0)");
-    ctx.beginPath();
-    linePoints.forEach(function (point, index) {
-      if (index === 0) {
-        ctx.moveTo(point.x, point.y);
-      } else {
-        ctx.lineTo(point.x, point.y);
-      }
-    });
-    ctx.lineTo(linePoints[linePoints.length - 1].x, height - padBottom);
-    ctx.lineTo(linePoints[0].x, height - padBottom);
-    ctx.closePath();
-    ctx.fillStyle = areaGradient;
-    ctx.fill();
-
-    ctx.strokeStyle = "#2468d8";
-    ctx.lineWidth = 2.4;
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    linePoints.forEach(function (point, index) {
-      if (index === 0) {
-        ctx.moveTo(point.x, point.y);
-      } else {
-        ctx.lineTo(point.x, point.y);
-      }
-    });
-    ctx.stroke();
 
     if (hoverPoint) {
       var hoverX = xOf(hoverPoint.ts);
-      var hoverY = yOf(hoverPoint.value);
+      var hoverY = yOf(getTrendPointValue(hoverPoint, data.series[0]));
       ctx.save();
       ctx.strokeStyle = "rgba(36, 104, 216, 0.22)";
       ctx.lineWidth = 1;
@@ -1790,23 +1772,15 @@
       ctx.moveTo(hoverX, padTop);
       ctx.lineTo(hoverX, height - padBottom);
       ctx.stroke();
-      ctx.fillStyle = "#2468d8";
-      ctx.beginPath();
-      ctx.arc(hoverX, hoverY, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = cssVar("--panel");
-      ctx.lineWidth = 2;
-      ctx.stroke();
+      drawTrendHoverMarkers(ctx, hoverPoint, data.series, xOf, yOf);
       ctx.restore();
     }
 
     var last = points[points.length - 1];
-    ctx.fillStyle = "#2468d8";
-    ctx.beginPath();
-    ctx.arc(xOf(last.ts), yOf(last.value), 3, 0, Math.PI * 2);
-    ctx.fill();
+    drawTrendHoverMarkers(ctx, last, data.series.slice(0, 1), xOf, yOf, 3);
     assetTrendRenderState = {
       points: points,
+      data: data,
       padLeft: padLeft,
       padRight: padRight,
       padTop: padTop,
@@ -1818,6 +1792,242 @@
       minValue: minValue,
       maxValue: maxValue
     };
+  }
+
+  function getAssetTrendChartData(mode, range) {
+    if (mode === "daily") {
+      var dailyPoints = getDailyAverageTrendPoints(getAssetTrendPoints(range));
+      return {
+        mode: mode,
+        points: dailyPoints,
+        series: [{ name: "日均资产", color: "#2468d8" }],
+        hint: dailyPoints.length ? "日均 " + privateMoney(dailyPoints[dailyPoints.length - 1].value) : "",
+        emptyText: "暂无资产变化数据",
+        startsAtZero: false
+      };
+    }
+    if (mode === "income" || mode === "expense") {
+      return getFlowStructureTrendData(mode, range);
+    }
+    var assetPoints = getAssetTrendPoints(range);
+    return {
+      mode: "asset",
+      points: assetPoints,
+      series: [{ name: "总资产", color: "#2468d8" }],
+      hint: assetPoints.length ? "当前 " + privateMoney(assetPoints[assetPoints.length - 1].value) : "",
+      emptyText: "暂无资产变化数据",
+      startsAtZero: false
+    };
+  }
+
+  function getDailyAverageTrendPoints(points) {
+    if (!points.length) {
+      return [];
+    }
+    var result = [];
+    var count = 0;
+    var index = 0;
+    var currentValue = Number(points[0].value) || 0;
+    var cursor = startOfDay(new Date(points[0].ts)).getTime();
+    var end = startOfDay(new Date(points[points.length - 1].ts)).getTime();
+    for (var guard = 0; cursor <= end && guard < 40000; guard += 1) {
+      var dayEnd = cursor + 86400000 - 1;
+      while (index + 1 < points.length && points[index + 1].ts <= dayEnd) {
+        index += 1;
+        currentValue = Number(points[index].value) || 0;
+      }
+      count += 1;
+      result.push({ ts: cursor, value: roundMoney(currentValue / count) });
+      cursor += 86400000;
+    }
+    return result;
+  }
+
+  function getFlowStructureTrendData(kind, range) {
+    var events = getFlowTrendEvents(kind);
+    var emptyText = kind === "income" ? "暂无收入结构数据" : "暂无支出结构数据";
+    if (!events.length) {
+      return { mode: kind, points: [], series: [], hint: "", emptyText: emptyText, startsAtZero: true };
+    }
+    var now = Date.now();
+    var all = range === "all";
+    var startTs = all ? events[0].ts : now - Number(range || 30) * 86400000;
+    var visibleEvents = events.filter(function (event) {
+      return event.ts >= startTs && event.ts <= now;
+    });
+    var totals = {};
+    visibleEvents.forEach(function (event) {
+      totals[event.category] = roundMoney((totals[event.category] || 0) + event.amount);
+    });
+    var total = Object.keys(totals).reduce(function (sum, key) { return sum + totals[key]; }, 0);
+    if (!total) {
+      return { mode: kind, points: [], series: [], hint: "", emptyText: emptyText, startsAtZero: true };
+    }
+    var categories = Object.keys(totals)
+      .filter(function (key) { return totals[key] / total >= 0.01; })
+      .sort(function (a, b) { return totals[b] - totals[a]; });
+    if (!categories.length) {
+      return { mode: kind, points: [], series: [], hint: "", emptyText: emptyText, startsAtZero: true };
+    }
+    var selected = new Set(categories);
+    var values = {};
+    categories.forEach(function (category) {
+      values[category] = 0;
+    });
+    var points = [{ ts: startTs, values: Object.assign({}, values), value: 0 }];
+    visibleEvents.forEach(function (event) {
+      if (!selected.has(event.category)) {
+        return;
+      }
+      values[event.category] = roundMoney((values[event.category] || 0) + event.amount);
+      points.push({ ts: event.ts, values: Object.assign({}, values), value: sumSelectedValues(values, categories) });
+    });
+    points.push({ ts: all ? Math.max(now, events[events.length - 1].ts) : now, values: Object.assign({}, values), value: sumSelectedValues(values, categories) });
+    points = compactSeriesTrendPoints(points);
+    var series = categories.map(function (category, index) {
+      return {
+        name: category,
+        color: chartColors[index % chartColors.length]
+      };
+    });
+    var lastValue = points.length ? points[points.length - 1].value : 0;
+    return {
+      mode: kind,
+      points: points,
+      series: series,
+      hint: (kind === "income" ? "累计收入 " : "累计支出 ") + privateMoney(lastValue),
+      emptyText: emptyText,
+      startsAtZero: true
+    };
+  }
+
+  function getFlowTrendEvents(kind) {
+    var events = [];
+    state.records.forEach(function (record) {
+      if (record.kind === "investment") {
+        var profit = Number(record.investmentProfit) || 0;
+        if ((kind === "income" && profit > 0) || (kind === "expense" && profit < 0)) {
+          addFlowTrendEvent(events, record.occurredAt, "理财", Math.abs(profit));
+        }
+        return;
+      }
+      if (record.kind !== kind) {
+        return;
+      }
+      var category = cleanText(record.category) || "其他";
+      if (record.settlement === "pending") {
+        if (Array.isArray(record.settlementEvents) && record.settlementEvents.length) {
+          record.settlementEvents.forEach(function (event) {
+            addFlowTrendEvent(events, event.at || record.occurredAt, category, Number(event.amount) || 0);
+          });
+          return;
+        }
+        if (Number(record.settledAmount) > 0) {
+          addFlowTrendEvent(events, record.settledAt || record.occurredAt, category, Number(record.settledAmount));
+        }
+        return;
+      }
+      addFlowTrendEvent(events, record.occurredAt, category, Number(record.amount) || 0);
+    });
+    return events
+      .filter(function (event) { return Number.isFinite(event.ts) && event.amount > 0; })
+      .sort(function (a, b) { return a.ts - b.ts; });
+  }
+
+  function addFlowTrendEvent(events, iso, category, amount) {
+    var ts = new Date(iso).getTime();
+    if (Number.isFinite(ts) && amount > 0) {
+      events.push({ ts: ts, category: category, amount: roundMoney(amount) });
+    }
+  }
+
+  function compactSeriesTrendPoints(points) {
+    var byDay = new Map();
+    points.forEach(function (point) {
+      var key = new Date(point.ts).toISOString().slice(0, 10);
+      byDay.set(key, point);
+    });
+    return Array.from(byDay.values()).sort(function (a, b) { return a.ts - b.ts; });
+  }
+
+  function sumSelectedValues(values, categories) {
+    return roundMoney(categories.reduce(function (sum, category) {
+      return sum + (Number(values[category]) || 0);
+    }, 0));
+  }
+
+  function getTrendYValues(data) {
+    var values = [];
+    data.points.forEach(function (point) {
+      data.series.forEach(function (series) {
+        values.push(getTrendPointValue(point, series));
+      });
+    });
+    if (data.startsAtZero) {
+      values.push(0);
+    }
+    return values;
+  }
+
+  function getTrendPointValue(point, series) {
+    if (point.values) {
+      return Number(point.values[series.name]) || 0;
+    }
+    return Number(point.value) || 0;
+  }
+
+  function drawSingleTrendArea(ctx, points, xOf, yOf, baseY) {
+    var areaGradient = ctx.createLinearGradient(0, 0, 0, baseY);
+    areaGradient.addColorStop(0, "rgba(36, 104, 216, 0.24)");
+    areaGradient.addColorStop(0.58, "rgba(36, 104, 216, 0.08)");
+    areaGradient.addColorStop(1, "rgba(36, 104, 216, 0)");
+    ctx.beginPath();
+    points.forEach(function (point, index) {
+      var x = xOf(point.ts);
+      var y = yOf(point.value);
+      if (index === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    ctx.lineTo(xOf(points[points.length - 1].ts), baseY);
+    ctx.lineTo(xOf(points[0].ts), baseY);
+    ctx.closePath();
+    ctx.fillStyle = areaGradient;
+    ctx.fill();
+  }
+
+  function drawTrendLine(ctx, points, series, xOf, yOf, index) {
+    ctx.strokeStyle = series.color || chartColors[index % chartColors.length];
+    ctx.lineWidth = index === 0 ? 2.4 : 2;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    points.forEach(function (point, pointIndex) {
+      var x = xOf(point.ts);
+      var y = yOf(getTrendPointValue(point, series));
+      if (pointIndex === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
+    });
+    ctx.stroke();
+  }
+
+  function drawTrendHoverMarkers(ctx, point, seriesList, xOf, yOf, radius) {
+    var markerRadius = radius || 4;
+    seriesList.forEach(function (series) {
+      var value = getTrendPointValue(point, series);
+      ctx.fillStyle = series.color || "#2468d8";
+      ctx.beginPath();
+      ctx.arc(xOf(point.ts), yOf(value), markerRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = cssVar("--panel");
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
   }
 
   function getAssetTrendPoints(range) {
@@ -2022,7 +2232,8 @@
       return Math.abs(point.ts - targetTs) < Math.abs(best.ts - targetTs) ? point : best;
     }, stateInfo.points[0]);
     var pointX = stateInfo.padLeft + (nearest.ts - stateInfo.minTs) / (stateInfo.maxTs - stateInfo.minTs) * stateInfo.plotW;
-    var pointY = stateInfo.padTop + (stateInfo.maxValue - nearest.value) / (stateInfo.maxValue - stateInfo.minValue) * stateInfo.plotH;
+    var pointValue = getTrendPointValue(nearest, stateInfo.data.series[0]);
+    var pointY = stateInfo.padTop + (stateInfo.maxValue - pointValue) / (stateInfo.maxValue - stateInfo.minValue) * stateInfo.plotH;
     var dragRange = null;
     if (assetTrendDrag) {
       assetTrendDrag.currentTs = targetTs;
@@ -2030,12 +2241,27 @@
     }
     drawAssetTrendChart(nearest, dragRange);
     var tooltip = els.assetTrendTooltip;
-    tooltip.innerHTML = "<strong>" + escapeHtml(formatTrendDate(nearest.ts)) + "</strong><span>" + escapeHtml(privateMoney(nearest.value)) + "</span>";
+    tooltip.innerHTML = renderAssetTrendTooltip(nearest, stateInfo.data);
     tooltip.classList.remove("hidden");
-    var left = Math.max(8, Math.min(rect.width - 132, pointX + 12));
+    var tooltipWidth = stateInfo.data.series.length > 1 ? 190 : 132;
+    var left = Math.max(8, Math.min(rect.width - tooltipWidth, pointX + 12));
     var top = Math.max(8, pointY - 42);
     tooltip.style.left = Math.round(left) + "px";
     tooltip.style.top = Math.round(top) + "px";
+  }
+
+  function renderAssetTrendTooltip(point, data) {
+    var html = "<strong>" + escapeHtml(formatTrendDate(point.ts)) + "</strong>";
+    if (data.series.length <= 1) {
+      html += "<span>" + escapeHtml(privateMoney(getTrendPointValue(point, data.series[0]))) + "</span>";
+      return html;
+    }
+    html += "<div class=\"trend-tooltip-list\">";
+    data.series.forEach(function (series) {
+      html += "<div><i style=\"background:" + escapeHtml(series.color) + "\"></i><span>" + escapeHtml(series.name) + "</span><b>" + escapeHtml(privateMoney(getTrendPointValue(point, series))) + "</b></div>";
+    });
+    html += "</div>";
+    return html;
   }
 
   function hideAssetTrendTooltip() {
@@ -3368,8 +3594,9 @@
   function applyTheme(theme) {
     var value = theme === "dark" ? "dark" : "light";
     document.documentElement.setAttribute("data-theme", value);
-    if (els.themeIcon) {
-      els.themeIcon.textContent = value === "dark" ? "☾" : "☀";
+    if (els.themeIconSun && els.themeIconMoon) {
+      els.themeIconSun.classList.toggle("hidden", value === "dark");
+      els.themeIconMoon.classList.toggle("hidden", value !== "dark");
     }
     if (els.themeToggle) {
       els.themeToggle.title = value === "dark" ? "切换到白色主题" : "切换到黑色主题";
